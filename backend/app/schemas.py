@@ -72,6 +72,12 @@ class ImportResult(BaseModel):
     ]] = Field(default_factory=dict)
     participants: list[ParticipantCandidate] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+    # Version tracking is additive and optional so existing import callers keep
+    # their response shape and historical cached results remain readable.
+    version_status: str | None = None
+    version_id: str | None = None
+    version_group_id: str | None = None
+    identity_status: str | None = None
 
 
 class BatchNoticeSummary(BaseModel):

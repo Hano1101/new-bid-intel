@@ -207,6 +207,7 @@ function valueEvidenceLabel(field, item) {
           <p class="eyebrow">SOURCE EVIDENCE</p>
           <h2 id="evidence-title">公告详情与原文证据</h2>
           <p v-if="notice" class="evidence-subtitle">公告 #{{ notice.notice_id }} · {{ notice.metadata.project_name || notice.metadata.project_number || '未保存公告名称' }}</p>
+          <p v-if="notice?.version_id" class="evidence-subtitle">所查看的版本快照：{{ notice.version_id }} · {{ notice.imported_at }}</p>
         </div>
         <button type="button" class="evidence-close" aria-label="关闭公告详情" @click="$emit('close')">×</button>
       </header>
@@ -319,6 +320,7 @@ function valueEvidenceLabel(field, item) {
           </div>
           <p v-else class="evidence-empty">本次记录保存的警告数为 0</p>
         </section>
+        <slot name="version-history" />
       </template>
 
       </section>

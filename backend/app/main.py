@@ -38,6 +38,8 @@ from app.schemas import (
     OrganizationSelection,
 )
 from app.storage import count_notices, get_notice_detail, initialize, search_items
+from app.version_api import router as version_router
+from app.version_import_api import router as version_import_router
 
 
 @asynccontextmanager
@@ -106,6 +108,8 @@ app.include_router(jobs_router)
 app.include_router(relation_clues_router)
 app.include_router(review_queue_router)
 app.include_router(controlled_query_router_for())
+app.include_router(version_router)
+app.include_router(version_import_router)
 
 
 @app.get("/api/v1/parser-capabilities")

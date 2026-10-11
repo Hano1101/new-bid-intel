@@ -4,6 +4,8 @@ import RelationshipGraph from './components/RelationshipGraph.vue'
 import BatchJobs from './components/BatchJobs.vue'
 import AuthGate from './components/AuthGate.vue'
 import NoticeEvidenceDialog from './components/NoticeEvidenceDialog.vue'
+import NoticeVersionHistory from './components/NoticeVersionHistory.vue'
+import { versionEvidencePath } from './utils/versionDiff.js'
 import RelationshipClues from './components/RelationshipClues.vue'
 import ControlledQuery from './components/ControlledQuery.vue'
 import ReviewQueue from './components/ReviewQueue.vue'
@@ -177,13 +179,14 @@ async function searchItems() {
   }
 }
 
-async function openNoticeDetail(noticeId, itemId = null) {
+async function openNoticeDetail(noticeId, itemId = null, versionId = null) {
   noticeDetail.value = null
   noticeDetailItemId.value = itemId
   noticeDetailError.value = ''
   noticeDetailLoading.value = true
   try {
-    const response = await datasetFetch(`${apiBase}/api/v1/notices/${noticeId}`)
+    const path = versionId ? versionEvidencePath(versionId) : `/api/v1/notices/${noticeId}`
+    const response = await datasetFetch(`${apiBase}${path}`)
     const payload = await response.json()
     if (!response.ok) throw new Error(payload.detail || '公告详情读取失败')
     noticeDetail.value = payload
@@ -599,7 +602,13 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncSectionFromHa
       :loading="noticeDetailLoading"
       :error="noticeDetailError"
       @close="noticeDetail = null; noticeDetailItemId = null; noticeDetailError = ''"
-    />
+    >
+      <template #version-history>
+        <NoticeVersionHistory v-if="noticeDetail" :notice-id="noticeDetail.notice_id"
+          :dataset-id="datasetId" :api-base="apiBase" :fetch-impl="apiFetch"
+          @open-evidence="openNoticeDetail($event.notice_id, $event.item_id || null, $event.version_id)" />
+      </template>
+    </NoticeEvidenceDialog>
 
     <RelationshipClues
       v-if="datasetReady && activeSection === 'analytics'"

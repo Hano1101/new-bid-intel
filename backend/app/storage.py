@@ -147,6 +147,11 @@ def connect(path: Path) -> sqlite3.Connection:
 def initialize(path: Path) -> None:
     with connect(path) as connection:
         connection.executescript(SCHEMA)
+        # Version snapshots are append-only and independent from the mutable
+        # normalized notice tables.  Creating these tables is a safe migration:
+        # existing rows are never read back as invented historical versions.
+        from app.notice_versions import initialize_versions
+        initialize_versions(connection)
         for table in ("bid_participations", "awards", "procurement_items"):
             columns = {
                 row["name"] for row in connection.execute(f"PRAGMA table_info({table})")
@@ -217,27 +222,46 @@ def save_import(
     replace_existing: bool = False,
     source_documents: list[tuple[str, bytes]] | None = None,
     source_hashes: list[tuple[str, str, int]] | None = None,
+    source_texts: dict[str, str] | None = None,
+    version_identity: dict[str, str] | None = None,
+    version_reason: str = "notice_import",
+    version_packages: list[dict[str, Any]] | None = None,
 ) -> ImportResult:
     initialize(path)
     with connect(path) as connection:
+        connection.execute('BEGIN IMMEDIATE')
+        prior = None
+        next_notice_id = connection.execute(
+            'SELECT COALESCE(MAX(id), 0) + 1 FROM '
+            '(SELECT id FROM notices UNION ALL SELECT notice_id AS id FROM notice_versions)',
+        ).fetchone()[0]
         if source_key is not None:
-            connection.execute('BEGIN IMMEDIATE')
             prior = connection.execute(
                 'SELECT notice_id FROM import_receipts WHERE source_key = ?', (source_key,),
             ).fetchone()
+            if prior is not None and not replace_existing:
+                return result.model_copy(update={'notice_id': prior['notice_id']})
             if prior is not None:
-                if not replace_existing:
-                    return result.model_copy(update={'notice_id': prior['notice_id']})
-                connection.execute('DELETE FROM organization_aliases WHERE source_notice_id = ?',
+                if not connection.execute(
+                    'SELECT 1 FROM notice_version_links WHERE notice_id=?', (prior['notice_id'],),
+                ).fetchone():
+                    raise ValueError('旧公告未保存版本，禁止覆盖；请独立导入新快照并保留旧记录')
+                # Preserve the existing candidate epoch/ID behavior of retries;
+                # their immutable version and evidence are independent of this
+                # mutable projection. A failure rolls the entire delete back.
+                connection.execute('DELETE FROM organization_aliases WHERE source_notice_id=?',
                                    (prior['notice_id'],))
-                connection.execute('DELETE FROM notices WHERE id = ?', (prior['notice_id'],))
+                connection.execute('DELETE FROM notices WHERE id=?', (prior['notice_id'],))
         cursor = connection.execute(
             """INSERT INTO notices (
-                project_name, project_number, procurement_unit, project_budget,
+                id, project_name, project_number, procurement_unit, project_budget,
                 announced_total_award, metadata_evidence_json, metadata_field_status_json,
                 source_files_json, warnings_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
+                # Deleted mutable projections must never reuse a historical
+                # version's notice ID, or a history/evidence link can change owner.
+                next_notice_id,
                 result.metadata.project_name,
                 result.metadata.project_number,
                 result.metadata.procurement_unit,
@@ -253,6 +277,7 @@ def save_import(
         source_records = {
             (source_file, hashlib.sha256(content).hexdigest(), len(content))
             for source_file, content in source_documents or []
+            if source_file not in {record[0] for record in source_hashes or []}
         }
         for source_file, digest, byte_size in source_hashes or []:
             if (not isinstance(source_file, str) or not source_file
@@ -371,9 +396,39 @@ def save_import(
                     item.confidence,
                 ),
             )
+        from app.notice_versions import capture_version
+        version = capture_version(
+            connection,
+            path,
+            result.model_copy(update={"notice_id": notice_id}),
+            sorted(source_records),
+            documents=source_documents,
+            source_texts=source_texts,
+            identity=version_identity,
+            reason=version_reason,
+            version_packages=version_packages,
+        )
+        if version['status'] == 'duplicate_snapshot':
+            duplicate_notice_id = connection.execute(
+                'SELECT notice_id FROM notice_versions WHERE version_id=?', (version['version_id'],),
+            ).fetchone()[0]
+            if connection.execute('SELECT 1 FROM notices WHERE id=?',
+                                  (duplicate_notice_id,)).fetchone():
+                connection.execute('DELETE FROM organization_aliases WHERE source_notice_id=?',
+                                   (notice_id,))
+                connection.execute('DELETE FROM notices WHERE id=?', (notice_id,))
+                connection.execute('DELETE FROM notice_version_links WHERE notice_id=?', (notice_id,))
+                notice_id = duplicate_notice_id
         if source_key is not None:
-            connection.execute('INSERT INTO import_receipts VALUES (?, ?)', (source_key, notice_id))
-        return result.model_copy(update={"notice_id": notice_id})
+            connection.execute('INSERT OR REPLACE INTO import_receipts VALUES (?, ?)',
+                               (source_key, notice_id))
+        return result.model_copy(update={
+            "notice_id": notice_id,
+            "version_status": version["status"],
+            "version_id": version["version_id"],
+            "version_group_id": version["group_id"],
+            "identity_status": version["identity_status"],
+        })
 
 
 def search_items(

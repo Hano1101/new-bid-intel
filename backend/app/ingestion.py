@@ -772,6 +772,8 @@ def _ingest_expanded(
     return save_import(
         database_path,
         result,
+        source_documents=[(document.filename, document.content) for document in expanded],
+        source_texts=source_texts,
         source_hashes=[
             (document.filename,
              document.source_sha256 or hashlib.sha256(document.content).hexdigest(),
