@@ -1,6 +1,6 @@
 # 接手必读
 
-> 面向**新加入的队友**和**接手本仓库的 AI agent**。当前状态整理于 2026-10-01。
+> 面向**新加入的队友**和**接手本仓库的 AI agent**。当前状态整理于 2026-10-11。
 >
 > | 想找什么 | 去哪 |
 > |---|---|
@@ -35,14 +35,14 @@
 
 ## 二、现在到哪了
 
-- ✅ **受支持格式的基础链路已回归**：解析（HTML/DOC/DOCX/XLS/XLSX/PDF）→ 抽取 → SQLite 入库 → 五类查询 → 前端。2026-10-09 当前工作树后端全量 `521 passed / 3 skipped`（2 条 warning），Ruff clean；3 个可选集成测试因外部运行条件未配置而跳过，本轮没有配置 Neo4j。前端 `33 passed` 与生产构建通过（有大 chunk 提示）。
+- ✅ **受支持格式的基础链路已回归**：解析（HTML/DOC/DOCX/XLS/XLSX/PDF）→ 抽取 → SQLite 入库 → 五类查询 → 前端。提交 `c1fc4c4` 后端全量 `662 passed / 7 skipped / 2 warnings`，Ruff clean；前端 `80 passed` 与生产构建通过（有大 chunk 提示）。跳过项属于 Neo4j、LibreOffice 和 Windows 符号链接等外部条件。
 - ✅ **GAP 1.20 PDF 用途边界已回归**：PDF 页码标记不再阻断历史用途标题识别；当前相关测试 `106 passed`。页内结构压平及正文出现与解析器同格式字面页标记仍是限制；该单样例已用于调试，不是独立评测结果。
 - ✅ **模型抽取已修好**并用真实公告验证（原本 0 条 → 19 条）。**P0 七项已完成本地回归**，验收边界见 [`CHANGELOG.md`](CHANGELOG.md)。
 - ✅ **P1-1 结构化投标主体抽取已实现**：从带有投标/评审/报价/成交上下文的结构化表格提取主体、包号和明示结果，保留来源证据；仅凭排名不会推断中标。1038 条全量规则/OCR回灌已有主体和中标候选，但仍需独立 Gold 验证，不能把入库数量当准确率。
 - ✅ **P1-4 演示三件套已加入**：Windows 启动/停止脚本、包含 XLSX 附件的虚构 HTML/ZIP 样例、无需模型的离线合成数据集。离线数据有 3 条公告和 7 条投标参与记录，可走五类查询；不能用于比赛评分。
-- ✅ **P1-5 评审登录已实现**：单评审账号 + HMAC 签名 HttpOnly Cookie，账号配置脚本和操作指南已加入。自动化覆盖本机登录/API 保护/退出流程；第二台物理设备的局域网登录、Cookie 与防火墙访问尚未验收。
-- ✅ **24 条调优 Gold 与 24 条本地 holdout Gold 已建立**，均不是官方 ground-truth。10 月 9 日三路线均完成 24/24；source-verified v2（24 公告、120 标的）已对旧 rules/hybrid/model 预测完成 `local_proxy` 离线重评分，原 Gold、预测与旧报告保留。cache-only 改后回放完成 14/24，10 条因缺 parse cache 隔离，未重解析或调用模型；该集合已用于调试，后续同集仅为开发回归，不是未触碰的独立测试。见 [评测审计](agent-evaluation-semantics-audit.md)、[来源复核](agent-gold-source-verification.md) 和 [优先级 1 回放报告](agent-gap-priority1-cache-only-replay-report.md)。
-- ⚠️ **官方全量处理已完成，结果仍待核验**：1038 条公告已进入独立数据集，后台任务最终 1038/1038 完成、0 失败。使用 `rules + 本地 RapidOCR`，没有真实模型调用；修复后全量回灌为 5009 条投标参与候选、1315 条中标记录，另有标的候选和 warning 仍需对照原文人工核验。附件统计显示 12,124 个成功或部分解析、986 个按参考材料保留、19 个程序解析失败和 7 个不支持文件；87 个无效下载响应保持原样，未伪造附件内容。**这不是准确率结果**，必须对照原文人工标注；细节见 [官方接入检查](OFFICIAL_INTAKE_REVIEW.md) 和 [附件统计](benchmarks/official-attachments-20260930.json)。
+- ✅ **P1-5 评审登录已实现**：单评审账号 + HMAC 签名 HttpOnly Cookie，账号配置脚本和操作指南已加入。自动化覆盖本机登录/API 保护/退出流程；局域网部署与检查步骤见 LAN_ACCEPTANCE.md，团队已反馈跨设备使用正常。
+- ✅ **24 条本地 reviewed 数据已完成三路线回放**，但均不是官方 ground-truth，也不是未触碰的独立测试集；该集合已经参与调试，之后只作开发回归。source-verified v2（24 公告、120 标的）及 cache-only 诊断报告仍保留作历史证据，10 条缺 parse cache 的历史回放按 fail-closed 关闭。见 [评测审计](archive/reports/agent-evaluation-semantics-audit.md)、[来源复核](archive/reports/agent-gold-source-verification.md) 和 [优先级 1 回放报告](archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
+- ⚠️ **官方全量处理已完成，结果仍待核验**：1038 条公告已进入独立数据集，后台任务最终 1038/1038 完成、0 失败。使用 `rules + 本地 RapidOCR`，没有真实模型调用；修复后全量回灌为 5009 条投标参与候选、1315 条中标记录，另有标的候选和 warning 仍需对照原文人工核验。附件统计显示 12,124 个成功或部分解析、986 个按参考材料保留、19 个程序解析失败和 7 个不支持文件；87 个无效下载响应保持原样，未伪造附件内容。**这不是准确率结果**，必须对照原文人工标注；细节见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md) 和 [附件统计](benchmarks/official-attachments-20260930.json)。
 - ⚠️ **速度基线有范围**：本次规则 + OCR 使用 3 个进程，逐条检查点估算活动处理时间约 66 分 45 秒，中位每条 1.127 秒、P95 41.249 秒。它不代表 hybrid/model 模式速度；优化模型调用前先读第七节。
 
 **开放问题不在这份文档里**——去 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) 的优先级表看，那里是唯一事实来源。
@@ -86,9 +86,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
 powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Demo.ps1
 ```
 
-账号文件位于 Git 忽略的 `backend/.data/reviewer-credentials.txt`；通过受控渠道交给评审方，不要提交或公开。默认开发配置 `AUTH_ENABLED=false`，运行账号脚本后登录才会启用。`-Offline` 建立独立虚构数据集并锁定 rules 模式，不需要 API Key；数据集可切换到“离线演示样例（纯虚构）”。脚本会把 Vite 和后端监听在所有网络接口，但远程访问尚未做第二台设备验证。账号设置、Cookie 和故障排查见 [`REVIEWER_GUIDE.md`](REVIEWER_GUIDE.md)。
+账号文件位于 Git 忽略的 `backend/.data/reviewer-credentials.txt`；通过受控渠道交给评审方，不要提交或公开。默认开发配置 `AUTH_ENABLED=false`，运行账号脚本后登录才会启用。`-Offline` 建立独立虚构数据集并锁定 rules 模式，不需要 API Key；数据集可切换到“离线演示样例（纯虚构）”。脚本会把 Vite 和后端监听在所有网络接口，远程访问使用演示主机的局域网地址。账号设置、Cookie 和故障排查见 [`REVIEWER_GUIDE.md`](REVIEWER_GUIDE.md)。
 
-执行第二台设备验收前，按 [P1-5 局域网验收清单](LAN_ACCEPTANCE.md) 的命令运行 `scripts/Test-LanDemo.ps1` 并完成跨设备登录、刷新、退出和断网提示检查。诊断脚本只验证演示主机本身，**不代表第二台设备已验收通过**。
+换机部署可按 [局域网检查清单](LAN_ACCEPTANCE.md) 运行 `scripts/Test-LanDemo.ps1`，再检查登录、刷新、退出和断网提示。诊断脚本只验证演示主机本身。
 
 模型配置**可以直接在网页「模型配置」面板填**（写入 `backend/.data/model_config.json`，重启不丢；`backend/.env` 作兜底默认值）。页面只显示打码尾号。
 
@@ -209,7 +209,7 @@ token 量差 4.5 倍，**吐字速率几乎一样**。所以模型没有"变慢"
 
 **规矩**：自动抽取结果**永远不能**直接当人工标准答案；空白表示原文未披露，不是"没有"；金额统一为元；中标方要**同时**列入投标主体。
 
-> ⚠️ 自动抽取结果永远不能当答案。没有独立金标、留出集和官方口径时，不要对外宣称准确率或官方成绩。
+> ⚠️ 自动抽取结果永远不能当答案。本地指标必须标明 reviewed 数据版本、profile 和对齐范围，不能把开发回归写成官方成绩。
 
 ## 九、数据在哪
 
@@ -241,7 +241,7 @@ token 量差 4.5 倍，**吐字速率几乎一样**。所以模型没有"变慢"
 `pilot-adjudication.md`（裁决记录）、`evaluation-rules-16notices.json/.md`（第一次评测报告）、
 `predictions.rules-refreshed.json`（修好的解析器重跑的预测）。
 
-> ⚠️ **没有留出集。** 24 条全部被看过指标了——按那个数字调优就是过拟合。
+> **数据定位：** 24 条 reviewed 数据已参与调试，今后用于开发回归，不再新建独立集或宣称独立泛化结果。
 > 见 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) 第零节的「不要做」。
 
 > **为什么 gold 这么关键**：赛题八说明评分基准那约 100 条「**不对外发放，仅用于评分**」。

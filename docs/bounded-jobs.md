@@ -84,4 +84,4 @@ curl -X POST -H 'X-Dataset-ID: default' 'http://127.0.0.1:8000/api/v1/jobs/JOB_I
 
 模型适配只实现仓库使用的 OpenAI-compatible Chat Completions/SSE 形式和可配置 endpoint。适配层保留 Qwen 兼容网关的 `chat_template_kwargs` 与 DeepSeek OpenAI-compatible 的 `thinking` 参数差异，并要求收到 SSE `[DONE]`、收全尾部 usage、拒绝 `finish_reason=length` 的输出。离线契约测试使用 mock；这不构成真实端点验收，也没有实现 Anthropic/Gemini 原生协议。比赛允许的模型仍由业务层 Qwen/DeepSeek 限制决定。
 
-初始并发值适用于小步部署和本地合成验证，不表示已经测出真实公告、OCR/Office 转换或真实供应商请求的容量。见 [有界并发离线验证](bounded-validation.md) 和 [三路线评测器](bounded-route-evaluation.md)。
+初始并发值适用于小步部署和本地合成验证，不表示已经测出真实公告、OCR/Office 转换或真实供应商请求的容量。见 [有界并发离线验证](archive/reports/bounded-validation.md) 和 [三路线评测器](bounded-route-evaluation.md)。

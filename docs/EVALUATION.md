@@ -4,13 +4,9 @@
 
 ## 数据集角色与最终闸门
 
-官方只提供原始公告、压缩包和附件，不提供逐条 ground-truth。仓库中的 Gold 按角色分开：
+仓库中的 24 条 reviewed 数据用于发现解析、合并和提示问题，也用于工程回归；它们不是官方成绩。定向回放用于诊断特定改动，不能外推为官方结论。
 
-- **tuning**：24 条 `gold.merged.json`，用于发现解析、合并和提示问题；可以反复使用，但不能作为最终成绩。
-- **targeted**：针对某个修复范围的定向回放，用于诊断包号、附件或模型证据问题；不能替代 holdout。
-- **holdout**：与 tuning notice ID 不重叠的独立原始材料。两位标注员独立完成共同 pilot、裁决后再完成正式分工，最终文件必须是 `gold.reviewed.json`。
-
-最终路线报告使用 `backend/app/route_evaluation_report.py` 的 `stage=final`。闸门会检查 Gold 文件名和 `reviewed` 状态、tuning/holdout notice ID 不重叠、三条路线全部完成、每条路线覆盖全部 holdout 公告、代码哈希冻结以及预测/评测产物齐全。未通过闸门的报告只能标为 prep 或 targeted。
+最终路线报告使用 `backend/app/route_evaluation_report.py` 的 `stage=final`。闸门会检查输入状态、三条路线完成度、代码哈希冻结以及预测/评测产物齐全；该工具只在输入满足独立性与来源约束时使用。未满足条件的本地报告仍应标为开发回归或定向诊断。
 
 报告除七字段和主体指标外，还应保留包号集合精确对齐率、重复候选数、附件/OCR覆盖、warning 分类、请求数、耗时和 token。所有结果必须注明“团队本地 Gold 验证，不是官方成绩”。
 
@@ -34,7 +30,7 @@ bidders 的口径是所有已确认投标的主体，包含中标方。非中标
 1. 固定源公告 ID/包 ID 映射，保留一份原始算法输出作为 predictions。
 2. 创建 status=draft 的独立标注文件，逐项对照源公告/附件核验全部标的字段及角色；模型草稿不能当作真值。
 3. 由人工确认范围完整、空值含义和角色口径后，才把 status 改为 reviewed。应留存标注人/复核人与来源证据的过程记录（不混入严格评估 JSON）。
-4. 运行评估，查看 JSON alignments 中错误字段和缺失记录，再回原始材料核对。训练/提示调优集与最终留出验证集应分离。
+4. 运行评估，查看 JSON alignments 中错误字段和缺失记录，再回原始材料核对。当前集合已经参与开发，后续只报告开发回归；不因使用 reviewed 或 final 标签改变其数据性质。
 
 默认拒绝 draft Gold。`--allow-draft` 仅允许临时自查，输出 `provisional=true` 和明显草稿提示，不可作为人工核验结果。当前状态是整个文件的审核声明；文件里只要还有未审核公告，就不能标 reviewed。
 
@@ -49,7 +45,7 @@ Web 工作台的 `/evaluation/draft` 生成空白 gold 结构和独立 predictio
 - 金额统一以人民币元比较，可显式解析 CNY/RMB/人民币/¥ 前缀、元后缀、万/亿缩放。例如 `人民币0.1万元` 和 `1000` 相等。外币、百分比和未支持单位直接拒绝，不做猜测。
 - 数量仅用无单位数字或正确分组数字字符串，`2台` 必须在导出前转为 `2`。评估七字段不包含数量单位；如果单位可能不同，先人工统一口径再导出，不能用本框架宣称单位级正确。
 - 判等容差：`abs(a-b) <= max(absolute_tolerance, relative_tolerance * max(abs(a),abs(b)))`。金额绝对容差默认 0.01 元，数量默认 0.000001，相对容差默认 1e-9，报告中记录实际参数。需要完全相等时将三个容差设为 0。
-- null、空串、纯空白都视作缺失。双空不计 TP/TN；一边有值计 FP 或 FN；双方非空但值错，同时计一个 FP 和一个 FN。
+- null、空串、纯空白都视作缺失。在 `local_proxy` 下，双空不计 TP/TN；一边有值计 FP 或 FN；双方非空但值错，同时计一个 FP 和一个 FN。`official_qa` 的互斥分类见下文。
 - 真值和预测都是多重集：额外重复行/重复实体计 FP；如果真值确有两条相同内容但不同 item_id 的业务记录，需要预测两条才能覆盖。不要人为复制标注行提高权重。
 
 实体按包隔离并按归一化名称一对一匹配，分别报告 buyer、winners、bidders、nonwinners；bidder_outcomes 要求名称与 outcome 同时一致。winner_amounts 要求同名中标方金额一致，与标的物总价分开。缺失/额外公告及包中的全部正例分别计 FN/FP；仅空公告不会产生虚构正例。
@@ -72,11 +68,44 @@ Web 工作台的 `/evaluation/draft` 生成空白 gold 结构和独立 predictio
 
 ### `official_qa`（赛题答疑的本地可复现解释）
 
-答疑表中的准确率/精确率/召回率说明将有字段/无字段解释为二分类 P/N 样本，并要求使用 TP、FP、TN、FN。仓库新增 `official_qa` profile，采用互斥分类：正确非空为 TP，非空但值错误或 Gold 缺失而预测有值为 FP，Gold 有值而预测缺失为 FN，双方缺失为 TN。其 Accuracy 为 `(TP + TN) / (TP + FP + TN + FN)`；Precision、Recall、F1 和加权公式保持不变。双方非空但值错误只计 FP，这是为避免一个二分类样本同时占用正类和负类计数而固定的本地约定。
+赛题答疑把指标说明为二分类迁移：有字段记为 P 样本，无字段/缺失记为 N 样本；TP 是“有字段且标注正确”，FP 是“有字段但标注错误”，并要求结合 TP、FP、TN、FN 计算。该答疑没有继续形式化多值字段、重复记录、实体角色和整条记录的匹配边界。仓库提供 `official_qa` profile 作为可复现的团队本地实现，对已进入一对一对齐范围的字段使用互斥分类：
 
-该 profile 不是主办方正式评分器。答疑没有明确重复记录、实体角色、完整记录和不可枚举负样本的详细边界，所以这些范围中的 TN 只表示当前可观察空槽，不代表公告全集。运行示例、限制和口径表见 [`EVALUATION_QA_POLICY.md`](EVALUATION_QA_POLICY.md)。旧 `local_proxy` 报告不回写、不改数字，也不能与 `official_qa` 结果直接比较。
+| Gold | Prediction | 类别 |
+|---|---|---|
+| 有值 | 相同值 | TP |
+| 有值 | 不同非空值 | FP |
+| 有值 | 缺失 | FN |
+| 缺失 | 有值 | FP |
+| 缺失 | 缺失 | TN |
 
-QA profile 的完整记录作为本地扩展：已匹配但不完整/有错的预测记录只记一次 FP，整条遗漏记 FN；字段层仍独立统计遗漏 FN。完整记录和主体名单不构造 TN，全空 item 在 schema 校验阶段被拒绝。同名中标方金额的双空可记 TN。这些规则是团队约定，不是答疑明确发布的完整评分协议。
+```text
+Precision = TP / (TP + FP)
+Recall = TP / (TP + FN)
+F1 = 2TP / (2TP + FP + FN)
+Accuracy = (TP + TN) / (TP + FP + TN + FN)
+Weighted = 0.4 × Accuracy + 0.3 × Precision + 0.3 × Recall
+```
+
+“双方非空但值错误”在本地答疑解释中只计 FP；Gold 有值而预测缺失仍计 FN。双方缺失只在对齐和未匹配记录构成的可观察字段槽位上计 TN，不能解释为整个公告世界的真阴性数量。空公告或空包不会生成虚构记录来增加 TN。
+
+完整记录是本地扩展口径：双方记录已匹配但任一字段错误或遗漏，记一个记录级 FP；整条预测缺失记 FN，额外预测记 FP，七字段一致记 TP。字段级遗漏仍记 FN，两种粒度不能相加。所有 item 在评分前必须至少有一个非空字段，全空 item 会被 Gold/Prediction schema 拒绝；完整记录、主体名单的 TN 恒为 0。同名中标方的金额比较允许双空记 TN，但不据此生成任何额外主体。
+
+从 `backend` 目录运行：
+
+```powershell
+.\.venv\Scripts\python.exe -m app.evaluation_cli `
+  --gold ..\examples\evaluation_gold.json `
+  --predictions ..\examples\evaluation_predictions.json `
+  --metric-profile official_qa `
+  --json-output ..\output\evaluation-official-qa.json `
+  --markdown-output ..\output\evaluation-official-qa.md
+```
+
+三路线报告可通过 `route_evaluation_report.py --metric-profile official_qa` 对已有预测重新计算；该操作不调用模型，不改动预测、Gold 或原始材料，并保留原路线报告的金额/数量容差、整数部分匹配等设置。QA 口径要求严格缺失分类，冲突设置会被拒绝。报告中的 `metric_code_sha256` 记录本次评分代码，`run_identity.code_sha256` 保留抽取运行代码，二者不互相替换。`stage=final` 仍要求三路线全部完成、reviewed Gold 和独立性等检查通过。
+
+旧的 `local_proxy` profile 继续保留；请求该口径时会核查缓存报告的类型和配置，防止把 QA 数字误贴成历史代理指标。历史报告不回写、不改数字，也不能与 `official_qa` 数字直接比较。
+
+`official_qa` 不是主办方发布的正式评分器。正式比赛若进一步明确多值字段的错值、重复记录、实体和空值口径，应更新 profile 和版本化报告，并重新计算指标。
 
 ## 命令行与 Python
 

@@ -47,7 +47,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
 powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Demo.ps1
 ```
 
-局域网演示须按 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md) 在第二台设备实测；启动脚本打印的本机地址和诊断结果不能代替跨设备验收。
+启动脚本会将演示服务绑定到网络接口并显示访问地址；局域网访问的具体可达性取决于部署主机的防火墙、路由和网络策略。部署配置与诊断命令见 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md)。
 
 ## 测试与检查
 
@@ -61,7 +61,7 @@ npm test
 npm run build
 ```
 
-当前基线：后端 `364 passed, 0 skipped（含真实 Neo4j 集成）`（2 条 warning），Ruff 通过，前端 `33 passed`，生产构建通过但有大 chunk 警告。数字会随代码变化；提交前以本次实际命令输出为准。
+当前基线（提交 `c1fc4c4`）：后端 `662 passed、7 skipped、2 warnings`，Ruff 通过，前端 `80 passed`，生产构建通过但有大 chunk 警告。跳过项来自 Neo4j、LibreOffice 和 Windows 符号链接权限等环境条件；提交前以本次实际命令输出为准。
 
 ### Neo4j 集成测试
 
@@ -80,9 +80,9 @@ $env:BIDINTEL_TEST_NEO4J_PASSWORD = "本地 Compose 密码"
 
 ## 评测开发
 
-- 调优集使用 `gold.merged.json`，用于发现解析和提示问题。
-- holdout Gold 必须由独立标注完成，不能用 `predictions.canonical.json` 代替。
-- 最终路线评测按 [`benchmarks/route-evaluation-runbook.md`](benchmarks/route-evaluation-runbook.md) 执行；不得在代码或提示未冻结前运行 `stage=final`。
+- `gold.merged.json` 是 24 条本地 reviewed 开发回归数据，已参与调试，适合发现解析和提示问题，不是独立测试集或官方评分基准。
+- 人工 Gold 依据原文标注，不得用 `predictions.canonical.json` 代替。
+- 三路线本地回归及报告生成方式见 [`benchmarks/route-evaluation-runbook.md`](benchmarks/route-evaluation-runbook.md)。涉及模型请求时先核对输出目录、模型配置和费用，再按需执行。
 - 评测运行目录和原始模型响应通常位于 Git 忽略的 `.data`，文档只链接可提交的报告或说明，不提交 API 响应和原始官方材料。
 
 ## 常见故障

@@ -2,20 +2,22 @@
 
 面向政府采购公告的模型主导抽取、关系建模与可核验分析平台，对应赛题五“面向行业数据的智能实体挖掘与关系建模”。系统从公告 HTML、压缩包和附件中抽取标的物七字段、采购单位、投标主体和中标结果，并提供五类关系查询、图谱分析和人工核验工作台。
 
-> **数据边界**：命题方提供原始公告和附件，不提供逐条 Gold / ground-truth。仓库中的 24 条 reviewed Gold、指标和 1038 条全量结果都是团队本地验证证据，不能写成官方准确率或官方成绩。
+**从材料到核查结果，一套工作台完成。** 复杂附件自动解析，结果可回查原文；主体关系可搜索、可解释；人工复核保留理由和历史；公告变化可比较版本。批量任务支持有界并发、检查点和暂停续跑。
+
+第一次了解作品，先看 [评委快速了解](docs/JUDGE_QUICKSTART.md)；需要完整材料，进入 [初赛报告与演示索引](deliverables/README.md)。
 
 ## 当前状态
 
 | 能力 | 状态 |
 |---|---|
-| 任务一：七字段、主体、中标结果抽取 | 已实现 rules / hybrid / model 三路线；本地 holdout Gold 已建立，最终三路线指标待代码冻结后验证 |
+| 任务一：七字段、主体、中标结果抽取 | rules / hybrid / model 三路线已实现；24 条本地 reviewed 数据已用于三路线开发回归 |
 | 任务二：五类关系查询与金额汇总 | SQLite 已验收；Neo4j 可选后端已接入并可回退 SQLite |
-| 任务三：导入、检索、分析、图谱投影、标注工作台 | 已实现；局域网第二台设备验收按清单执行 |
+| 任务三：导入、检索、分析、图谱投影、标注工作台 | 已实现；演示服务支持局域网部署配置 |
 | 附件处理 | HTML、DOC/DOCX、XLS/XLSX、PDF、图片/OCR、RAR/7z 及失败隔离已接入 |
 | 后台任务 | 检查点、暂停、续跑、失败重试、损坏结果恢复和数据集隔离已实现 |
-| 评测状态 | 24 条 tuning Gold 与 24 条本地 holdout Gold 已建立；当前 hybrid/model 留出集仍有不完整公告，不能生成最终路线结论 |
+| 评测状态 | 24 条本地 reviewed 数据已完成 rules/hybrid/model 回放；该集合已用于开发和调试，不是独立测试集或官方成绩 |
 
-当前验证基线：后端 `575 passed, 6 skipped`（2 条 warning），Ruff 通过，前端 `67 passed`，生产构建通过但有大 chunk 警告。Neo4j 集成测试按环境可选启用。最终指标必须在代码和提示冻结后，使用合规的 `gold.reviewed.json` 运行 `stage=final`；当前 24 条本地 Gold 仅用于开发回归，不能称为官方成绩。
+当前验证基线（提交 `c1fc4c4`）：后端 `662 passed, 7 skipped, 2 warnings`，Ruff 通过，前端 `80 passed`，生产构建通过但有大 chunk 警告。Neo4j、LibreOffice 和部分 Windows 符号链接测试按环境可选启用。本地 24 条 reviewed 数据已参与调试，指标按开发回归口径报告，不是官方成绩。
 
 ## 文档导航
 
@@ -36,6 +38,9 @@
 | [`docs/ANNOTATION_ANNOTATOR.md`](docs/ANNOTATION_ANNOTATOR.md) | 队友标注员操作卡 |
 | [`docs/INNOVATION_ROADMAP.md`](docs/INNOVATION_ROADMAP.md) | 面向采购甲方的创新功能顺序、依赖和验收标准 |
 | [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | 历史决策、验收范围和实测数字 |
+| [`docs/DOCUMENTATION_INDEX.md`](docs/DOCUMENTATION_INDEX.md) | 工程文档和比赛交付源稿总索引 |
+
+[`deliverables/`](deliverables/README.md) 提供系统设计、技术路线、数据质量三份 Word/PDF 报告及 Markdown 源稿，同时提供 PPT 内容大纲和两类视频脚本。
 
 ## 快速启动
 
@@ -76,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
 powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Demo.ps1
 ```
 
-离线数据集是虚构样例，只用于展示流程，不能用于比赛评分。局域网评审必须完成 [`docs/LAN_ACCEPTANCE.md`](docs/LAN_ACCEPTANCE.md) 的第二台设备验收。
+离线数据集是虚构样例，只用于展示流程，不能用于比赛评分。局域网演示可使用启动脚本输出的主机地址；实际访问取决于部署网络、防火墙和访问策略，配置说明见 [`docs/LAN_ACCEPTANCE.md`](docs/LAN_ACCEPTANCE.md)。
 
 ## 模型配置
 
@@ -111,7 +116,7 @@ docker compose up -d
 - `GET /api/v1/analytics/buyers/{buyer_id}/bidders`：场景二。
 - `GET /api/v1/analytics/suppliers/{supplier_id}/co-bidders`：场景三。
 - `POST /api/v1/analytics/common-buyers`、`POST /api/v1/analytics/common-projects`：场景四、五。
-- `POST /api/v1/controlled-query/parse`、`POST /api/v1/controlled-query/execute`：五场景白名单内的自然语言意图解析与只读执行；真实模型端点尚待验收。
+- `POST /api/v1/controlled-query/parse`、`POST /api/v1/controlled-query/execute`：五场景白名单内的自然语言意图解析与只读执行；模型端点可按赛事提供的兼容 API 配置切换。
 - `GET /api/v1/analytics/relation-clues`：按数据集返回带来源证据的待核查关系线索，当前使用 SQLite。
 - `GET /api/v1/evaluation/schema`、`POST /api/v1/evaluation/draft`、`POST /api/v1/evaluation/run`：标注和本地评测。
 - `GET /api/v1/graph`：SQLite 图谱可视化投影。
@@ -129,12 +134,12 @@ npm test
 npm run build
 ```
 
-评测流程、tuning/holdout 分离和 final 闸门见 [`docs/EVALUATION.md`](docs/EVALUATION.md) 与 [`docs/benchmarks/route-evaluation-runbook.md`](docs/benchmarks/route-evaluation-runbook.md)。历史 SQLite/Neo4j 双后端与新答疑口径 SQLite oracle 均有 `6471/6471` 记录，二者运行范围不同；本轮 Neo4j 另通过真实集成测试。范围说明见 [`docs/QUERY_SEMANTICS.md`](docs/QUERY_SEMANTICS.md)，这些都是团队本地验证，不是官方答案。
+本地评测方法与三路线回归运行说明见 [`docs/EVALUATION.md`](docs/EVALUATION.md) 和 [`docs/benchmarks/route-evaluation-runbook.md`](docs/benchmarks/route-evaluation-runbook.md)。24 条 reviewed 数据已参与开发调试，用于回归和路线诊断；本地指标不是官方评分结果。历史 SQLite/Neo4j 双后端与新答疑口径 SQLite oracle 均有 `6471/6471` 记录，二者运行范围不同；Neo4j 另通过真实集成测试。范围说明见 [`docs/QUERY_SEMANTICS.md`](docs/QUERY_SEMANTICS.md)。
 
 ## 已知限制
 
 - 官方没有逐条 ground-truth，因此 1038 条全量入库、候选数量、OCR覆盖率和查询可运行性都不能直接转换成准确率。
-- 24 条 tuning Gold 与 24 条本地 holdout Gold 已建立；当前 hybrid/model 留出运行仍有不完整公告，完成代码冻结后的三路线复跑前不能发布最终路线排名。
+- 24 条 reviewed 数据已完成三路线本地回放，作为工程回归和演示证据；其已用于开发调试，不是独立测试集。赛事平台按自身评分基准给出正式成绩，本地数字不替代官方成绩。
 - 87 个无效下载响应、19 个程序解析失败和 7 个不支持格式已隔离并保留来源，缺失源文件不能靠模型恢复。
 - 名称型包号需要明确标签和值的连续证据；证据不足时保留 `default`，可能影响包级对齐和包级统计。
 - `/api/v1/graph` 仍是 SQLite 投影，Neo4j 只控制五类分析 API。

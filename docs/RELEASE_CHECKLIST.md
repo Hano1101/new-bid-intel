@@ -1,6 +1,6 @@
 # 发布与提交检查清单
 
-本清单用于源码压缩包、评审演示和最终比赛材料准备。它不替代主办方最新通知；正式提交前应逐条核对官方模板和截止时间。
+本清单用于源码压缩包、评审演示和最终比赛材料准备。它不替代主办方最新通知；正式提交前按学校初赛的格式和截止时间核对。
 
 ## 代码与环境
 
@@ -16,15 +16,15 @@
 - [ ] 前端 `npm test` 和 `npm run build` 通过。
 - [ ] 至少完成一次离线启动、导入、五类查询、标注页和退出流程。
 - [ ] 若提交 Neo4j 能力，完成 Docker 集成测试，并记录 SQLite 对照结果。
-- [ ] 若使用局域网演示，完成 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md) 的第二台设备签收。
+- [ ] 换机或更换网络后，按 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md) 复查演示地址与登录。
 
 ## 数据与评测
 
-- [ ] 明确区分官方原始材料、团队调优 Gold、独立 holdout Gold 和预测结果。
+- [ ] 明确区分原始材料、团队 reviewed 开发回归数据和预测结果。
 - [ ] 不把 `predictions.canonical.json` 当真值；不把 24 条 tuning 指标或全量产出写成官方准确率。
-- [ ] 代码、提示词和归一化规则冻结后，才生成 `gold.reviewed.json` 并运行 `stage=final`。
-- [ ] final 报告覆盖三条路线的全部 holdout 公告，包含字段/记录/实体指标、包号集合对齐、重复候选、请求数、耗时、token 和附件/OCR告警。
-- [ ] 报告写明官方不提供逐条 ground-truth，指标是团队本地验证。
+- [ ] 引用结果绑定代码、提示词、Gold/输入版本和指标 profile。
+- [ ] 本地回归报告说明完成范围、字段/记录/实体指标、包号集合对齐、耗时与缓存条件；不使用 final 标签暗示独立性。
+- [ ] 报告写明样本、指标 profile 和团队本地回归口径。
 
 ## 比赛要求映射
 
@@ -34,7 +34,8 @@
 - [ ] 任务二数据模型、五类查询口径、SQLite/Neo4j 选择和金额汇总定义。
 - [ ] 任务三功能说明、运行步骤、评审账号交付方式和离线兜底。
 - [ ] 依赖、版本、关键代码注释、测试结果和已知限制。
-- [ ] 系统设计文档、技术路线对比分析和数据质量分析；PPT/视频按当前队伍计划另行制作。
+- [x] 系统设计、技术路线和数据质量三份 Word/PDF 已生成并逐页检查，见 [`deliverables/README.md`](../deliverables/README.md)。更改报告后重新检查。
+- [ ] 按 [`deliverables/presentation-outline.md`](../deliverables/presentation-outline.md) 制作 PPT，按 [`deliverables/demo-video-script.md`](../deliverables/demo-video-script.md) 录制并检查视频。
 
 ## 发布后核对
 
