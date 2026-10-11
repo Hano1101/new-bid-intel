@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { formatAmount } from '../utils/amountPolicy.js'
+import { fieldEvidenceLabel } from '../utils/evidenceStatus.js'
 
 const props = defineProps({
   notice: { type: Object, default: null },
@@ -12,6 +13,14 @@ const props = defineProps({
 defineEmits(['close'])
 
 const selectedEvidence = ref(null)
+const dialogRef = ref(null)
+const fragmentDialogRef = ref(null)
+let dialogReturnFocusElement = null
+let fragmentReturnFocusElement = null
+let lockedScrollY = 0
+let lockedScrollX = 0
+let previousBodyStyles = null
+const bodyLockProperties = ['position', 'top', 'left', 'right', 'width', 'overflow', 'padding-right']
 const itemFields = [
   { key: 'product_name', label: '产品 / 服务名称' },
   { key: 'category', label: '品目' },
@@ -34,7 +43,100 @@ watch(() => [props.notice?.notice_id, props.initialItemId], () => {
   if (item?.source_evidence) openEvidence(item, '标的候选')
 })
 
+function isDialogOpen() {
+  return Boolean(props.loading || props.error || props.notice)
+}
+
+function lockPageScroll() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return
+  const body = document.body
+  lockedScrollY = window.scrollY || window.pageYOffset || 0
+  lockedScrollX = window.scrollX || window.pageXOffset || 0
+  previousBodyStyles = Object.fromEntries(bodyLockProperties.map(property => [property, {
+    value: body.style.getPropertyValue(property),
+    priority: body.style.getPropertyPriority(property),
+  }]))
+  body.style.position = 'fixed'
+  body.style.top = `-${lockedScrollY}px`
+  body.style.left = `-${lockedScrollX}px`
+  body.style.right = '0'
+  body.style.width = '100%'
+  body.style.overflow = 'hidden'
+  const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth)
+  if (scrollbarWidth) body.style.paddingRight = `${scrollbarWidth}px`
+}
+
+function unlockPageScroll() {
+  if (!previousBodyStyles) return
+  for (const property of bodyLockProperties) {
+    const previous = previousBodyStyles[property]
+    if (previous.value) document.body.style.setProperty(property, previous.value, previous.priority)
+    else document.body.style.removeProperty(property)
+  }
+  previousBodyStyles = null
+  if (typeof window !== 'undefined') window.scrollTo(lockedScrollX, lockedScrollY)
+}
+
+function trapDialogTab(event, dialogReference) {
+  if (event.key !== 'Tab') return
+  const dialog = dialogReference.value
+  if (!dialog) return
+  const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+  if (!focusable.length) {
+    event.preventDefault()
+    dialog.focus()
+    return
+  }
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+watch(isDialogOpen, async (isOpen, wasOpen) => {
+  if (isOpen) {
+    if (!wasOpen) {
+      dialogReturnFocusElement = typeof document === 'undefined' ? null : document.activeElement
+      lockPageScroll()
+    }
+    await nextTick()
+    dialogRef.value?.focus()
+    return
+  }
+
+  if (wasOpen) {
+    selectedEvidence.value = null
+    unlockPageScroll()
+    await nextTick()
+    if (dialogReturnFocusElement?.isConnected) dialogReturnFocusElement.focus()
+    dialogReturnFocusElement = null
+  }
+})
+
+watch(selectedEvidence, async (evidence, previousEvidence) => {
+  if (evidence) {
+    await nextTick()
+    fragmentDialogRef.value?.focus()
+  } else if (previousEvidence) {
+    await nextTick()
+    if (isDialogOpen() && fragmentReturnFocusElement?.isConnected) fragmentReturnFocusElement.focus()
+    fragmentReturnFocusElement = null
+  }
+})
+
+onBeforeUnmount(() => {
+  unlockPageScroll()
+})
+
 function openEvidence(record, title) {
+  if (!selectedEvidence.value && typeof document !== 'undefined') {
+    fragmentReturnFocusElement = document.activeElement
+  }
   selectedEvidence.value = {
     title,
     source_file: record.source_file || '',
@@ -42,11 +144,17 @@ function openEvidence(record, title) {
     source_evidence: record.source_evidence || '',
     source_sha256: record.source_sha256 || '',
     source_hash_status: record.source_hash_status || 'not_saved',
+    source_hash_provenance_status: record.source_hash_provenance_status,
   }
+}
+
+function closeEvidenceDialog() {
+  selectedEvidence.value = null
 }
 
 function sourceHashLabel(record) {
   if (record.source_hash_status === 'ambiguous') return '同名来源文件哈希有歧义，无法可靠关联到此候选'
+  if (record.source_hash_provenance_status === 'unavailable') return '历史原始文件不可用，未保存可核验的 SHA-256'
   return record.source_sha256 || '未保存'
 }
 
@@ -64,19 +172,36 @@ function packageLabel(value) {
   return value === 'default' ? 'default（系统默认，非原文包号）' : value
 }
 
-function valueEvidenceLabel(value, evidence) {
-  if (value == null || value === '') {
-    return evidence
-      ? '无值；系统未保存“原文明确为空”状态'
-      : '无值 / 无证据；未提取与原文为空无法区分'
-  }
-  return evidence ? '有记录级证据，未保存字段级对应关系' : '无证据'
+function metadataEvidence(field) {
+  return props.notice?.metadata_evidence?.[field.key] || null
+}
+
+function metadataEvidenceLabel(field) {
+  const evidence = metadataEvidence(field)
+  return fieldEvidenceLabel(
+    props.notice?.metadata_field_status?.[field.key],
+    props.notice?.metadata?.[field.key],
+    Boolean(evidence?.source_evidence),
+    true,
+  )
+}
+
+function openMetadataEvidence(field) {
+  const evidence = metadataEvidence(field)
+  if (evidence?.source_evidence) openEvidence(evidence, field.label)
+}
+
+function valueEvidenceLabel(field, item) {
+  const fieldEvidence = item.field_evidence?.[field.key]
+  return fieldEvidenceLabel(item.field_status?.[field.key], item[field.key],
+    Boolean(fieldEvidence?.source_evidence || item.source_evidence), Boolean(fieldEvidence))
 }
 </script>
 
 <template>
-  <div v-if="loading || error || notice" class="evidence-overlay" @click.self="$emit('close')" @keydown.esc="$emit('close')">
-    <section class="evidence-dialog" role="dialog" aria-modal="true" aria-labelledby="evidence-title" tabindex="-1">
+  <Teleport to="body">
+    <div v-if="loading || error || notice" class="evidence-overlay" @click.self="$emit('close')" @keydown.esc="$emit('close')" @keydown.tab="trapDialogTab($event, dialogRef)">
+      <section ref="dialogRef" class="evidence-dialog" role="dialog" aria-modal="true" aria-labelledby="evidence-title" tabindex="-1">
       <header class="evidence-dialog-head">
         <div>
           <p class="eyebrow">SOURCE EVIDENCE</p>
@@ -91,7 +216,7 @@ function valueEvidenceLabel(value, evidence) {
 
       <template v-else-if="notice">
         <div class="evidence-boundary">
-          当前页面只展示已保存的来源证据。记录级片段不代表七字段各自的精确引用；系统未保存的证据标为“无证据”。
+          当前页面只展示已保存的来源证据。只有原文明写未公示才会标为明确未公示；空单元格和旧记录空值显示为待核验。记录级片段不代表每个字段的精确引用。
         </div>
 
         <section class="evidence-section">
@@ -100,7 +225,8 @@ function valueEvidenceLabel(value, evidence) {
             <article v-for="field in metadataFields" :key="field.key">
               <small>{{ field.label }}</small>
               <strong>{{ ['project_budget', 'announced_total_award'].includes(field.key) ? showAmount(notice.metadata[field.key]) : showValue(notice.metadata[field.key]) }}</strong>
-              <span class="evidence-missing">无证据 · 字段来源未保存</span>
+              <span :class="metadataEvidence(field)?.source_evidence ? 'evidence-present' : 'evidence-missing'">{{ metadataEvidenceLabel(field) }}</span>
+              <button v-if="metadataEvidence(field)?.source_evidence" type="button" class="source-open" @click="openMetadataEvidence(field)">查看字段来源片段</button>
             </article>
           </div>
         </section>
@@ -112,7 +238,7 @@ function valueEvidenceLabel(value, evidence) {
               <strong>{{ source.source_file }}</strong>
               <small>原始文件 SHA-256</small>
               <code>{{ source.sha256 || '未保存' }}</code>
-              <span>{{ source.file_available ? '原始文件可打开' : '原始文件字节未留存；可打开候选中保存的证据片段' }}</span>
+              <span>{{ source.file_available ? '原始文件可打开' : source.hash_provenance_status === 'unavailable' ? '原始文件字节未留存，历史 SHA-256 不可用' : '原始文件字节未留存；可打开候选中保存的证据片段' }}</span>
             </article>
           </div>
           <p v-else class="evidence-empty">无保存的来源文件清单</p>
@@ -142,8 +268,9 @@ function valueEvidenceLabel(value, evidence) {
                 <small>{{ field.label }}</small>
                 <strong>{{ ['unit_price', 'total_price'].includes(field.key) ? showAmount(item[field.key]) : showValue(item[field.key]) }}</strong>
                 <span :class="item.source_evidence ? 'evidence-present' : 'evidence-missing'">
-                  {{ valueEvidenceLabel(item[field.key], item.source_evidence) }}
+                  {{ valueEvidenceLabel(field, item) }}
                 </span>
+                <button v-if="item.field_evidence?.[field.key]?.source_evidence" type="button" class="source-open" @click="openEvidence(item.field_evidence[field.key], field.label)">查看字段来源</button>
               </div>
             </div>
             <div class="evidence-record-source">
@@ -194,19 +321,22 @@ function valueEvidenceLabel(value, evidence) {
         </section>
       </template>
 
-      <div v-if="selectedEvidence" class="source-fragment-overlay" @click.self="selectedEvidence = null" @keydown.esc="selectedEvidence = null">
-        <section class="source-fragment-dialog" role="dialog" aria-modal="true" aria-labelledby="fragment-title">
+      </section>
+    </div>
+  </Teleport>
+  <Teleport to="body">
+      <div v-if="selectedEvidence" class="source-fragment-overlay" @click.self="closeEvidenceDialog" @keydown.esc="closeEvidenceDialog" @keydown.tab="trapDialogTab($event, fragmentDialogRef)">
+        <section ref="fragmentDialogRef" class="source-fragment-dialog" role="dialog" aria-modal="true" aria-labelledby="fragment-title" tabindex="-1">
           <header>
             <div><p class="eyebrow">SAVED SOURCE EXCERPT</p><h3 id="fragment-title">{{ selectedEvidence.title }} · 对应证据片段</h3></div>
-            <button type="button" class="evidence-close" aria-label="关闭证据片段" @click="selectedEvidence = null">×</button>
+            <button type="button" class="evidence-close" aria-label="关闭证据片段" @click="closeEvidenceDialog">×</button>
           </header>
           <p><strong>来源文件：</strong>{{ selectedEvidence.source_file || '未保存' }}</p>
           <p><strong>原文定位：</strong>{{ selectedEvidence.source_location || '无定位' }}</p>
           <p><strong>SHA-256：</strong>{{ sourceHashLabel(selectedEvidence) }}</p>
           <pre>{{ selectedEvidence.source_evidence || '无证据' }}</pre>
-          <small>显示的是系统已保存的记录级片段；页面不推断未保存的页码或字段级引用。</small>
+          <small>显示系统已保存的来源片段；表格字段片段保留表头和单元格文本，文本行号指解析正文。页面不推断未保存的页码或字段级引用，已保存哈希不代表原件仍可打开。</small>
         </section>
       </div>
-    </section>
-  </div>
+  </Teleport>
 </template>

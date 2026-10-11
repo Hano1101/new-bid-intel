@@ -15,7 +15,7 @@
 | 后台任务 | 检查点、暂停、续跑、失败重试、损坏结果恢复和数据集隔离已实现 |
 | 评测状态 | 24 条 tuning Gold 与 24 条本地 holdout Gold 已建立；当前 hybrid/model 留出集仍有不完整公告，不能生成最终路线结论 |
 
-当前验证基线：后端 `364 passed, 0 skipped（含真实 Neo4j 集成）`（2 条 warning），Ruff 通过，前端 `33 passed`，生产构建通过但有大 chunk 警告。最终指标必须在代码和提示冻结后，使用独立 `gold.reviewed.json` 运行 `stage=final`；当前留出集运行仍有不完整公告。
+当前验证基线：后端 `575 passed, 6 skipped`（2 条 warning），Ruff 通过，前端 `67 passed`，生产构建通过但有大 chunk 警告。Neo4j 集成测试按环境可选启用。最终指标必须在代码和提示冻结后，使用合规的 `gold.reviewed.json` 运行 `stage=final`；当前 24 条本地 Gold 仅用于开发回归，不能称为官方成绩。
 
 ## 文档导航
 
@@ -104,7 +104,7 @@ docker compose up -d
 - `GET /api/v1/health`：健康检查。
 - `GET/PUT /api/v1/model-config`、`POST /api/v1/model-config/test`：读取、保存和探测模型配置（Key 只显示打码值）。
 - `POST /api/v1/notices/import`、`POST /api/v1/notices/import-batch`：单公告/批量导入。
-- `GET /api/v1/notices/{notice_id}`：只读公告详情，返回已保存的候选、关系、来源位置、证据片段、文件哈希和解析警告；没有保存的证据标为缺失。
+- `GET /api/v1/notices/{notice_id}`：只读公告详情，返回已保存的候选、关系、来源位置、字段来源片段、字段状态、文件哈希和解析警告；旧记录缺证据时标为未知/待核验，不回填推断值。
 - `GET/POST /api/v1/jobs`：创建、查看、暂停、续跑和报告后台任务。
 - `GET /api/v1/items`、`GET /api/v1/organizations`：检索候选和主体。
 - `GET /api/v1/analytics/buyers/{buyer_id}/awardees`：场景一。

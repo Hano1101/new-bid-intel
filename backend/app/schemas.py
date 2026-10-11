@@ -21,6 +21,10 @@ class ItemCandidate(BaseModel):
     source_file: str
     source_location: str
     source_evidence: str | None = None
+    field_status: dict[str, Literal[
+        "present", "explicitly_not_published", "blank_in_source", "unverified", "unknown",
+    ]] = Field(default_factory=dict)
+    field_evidence: dict[str, dict[str, str]] = Field(default_factory=dict)
     extraction_method: str = "table_header_mapping"
     confidence: float = Field(default=0.7, ge=0, le=1)
 
@@ -62,6 +66,10 @@ class ImportResult(BaseModel):
     items_found: int
     items: list[ItemCandidate]
     metadata: NoticeMetadata
+    metadata_evidence: dict[str, dict[str, str]] = Field(default_factory=dict)
+    metadata_field_status: dict[str, Literal[
+        "present", "explicitly_not_published", "blank_in_source", "unverified", "unknown",
+    ]] = Field(default_factory=dict)
     participants: list[ParticipantCandidate] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

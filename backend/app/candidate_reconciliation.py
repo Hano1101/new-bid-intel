@@ -13,6 +13,7 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from app.evidence import carry_field_evidence
 from app.package_codes import DEFAULT_PACKAGE_CODE, normalize_package_code
 from app.schemas import ItemCandidate, NoticeMetadata
 
@@ -298,12 +299,14 @@ def reconcile_candidates(
                        if getattr(merged, field) is None and getattr(candidate, field) is not None}
             if merged.package_code == DEFAULT_PACKAGE_CODE:
                 changes["package_code"] = package(candidate)
-            merged = merged.model_copy(update=changes)
+            merged = carry_field_evidence(merged, changes, candidate)
         if generic_name(row):
             specific = [rows[index] for index in indices
                         if not generic_name(rows[index]) and _specific_name_supported(rows[index])]
             if specific and len({_key(candidate.product_name) for candidate in specific}) == 1:
-                merged = merged.model_copy(update={"product_name": specific[0].product_name})
+                merged = carry_field_evidence(
+                    merged, {"product_name": specific[0].product_name}, specific[0],
+                )
         # Explicit aliases are only applied after an evidenced row correspondence.
         merged = merged.model_copy(update={"package_code": package(merged)})
         provenance = {

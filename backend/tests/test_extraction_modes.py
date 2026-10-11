@@ -55,6 +55,28 @@ def test_hybrid_merges_model_fields_into_same_rule_item_without_package_code():
     ]
 
 
+def test_hybrid_replacement_value_does_not_keep_the_rules_empty_cell_status():
+    rule = ItemCandidate(
+        product_name="打印机", source_file="notice.html", source_location="table:1/row:2",
+        field_status={"brand": "blank_in_source"},
+        field_evidence={"brand": {
+            "source_file": "notice.html", "source_location": "table:1/row:2/column:3",
+            "source_evidence": "品牌\n",
+        }},
+    )
+    model = ItemCandidate(
+        product_name="打印机", brand="Canon", source_file="notice.html",
+        source_location="model:1", source_evidence="打印机品牌为 Canon",
+    )
+
+    merged = _merge_model_items([rule], [model], [])
+
+    assert len(merged) == 1
+    assert merged[0].brand == "Canon"
+    assert merged[0].field_status["brand"] == "unverified"
+    assert "brand" not in merged[0].field_evidence
+
+
 def test_hybrid_does_not_merge_ambiguous_same_item_across_packages():
     rule_items = [
         ItemCandidate(package_code=package, product_name="电脑", source_file="notice.html",

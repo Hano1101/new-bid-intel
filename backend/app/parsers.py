@@ -262,17 +262,22 @@ def parse_item_tables(
                 extra['package_code'] = table_package
         total = _money(get_value('total_price'),
                        header[columns['total_price']] if 'total_price' in columns else '')
+        total_from_quote = False
         # 报价 alone is ambiguous; accept it only in an explicit 成交明细 sheet
         # with quantity/unit-price columns and a numeric row-level amount.
         if total is None and quotation and {'quantity', 'unit_price'} <= columns.keys():
-            for col, label in enumerate(header):
-                if _header_key(label) == '报价' and col < len(values):
-                    total = _money(values[col], label)
+            quote_column = next((col for col, label in enumerate(header)
+                                 if _header_key(label) == '报价' and col < len(values)), None)
+            if quote_column is not None:
+                total = _money(values[quote_column], header[quote_column])
+                total_from_quote = total is not None
         candidate = ItemCandidate(
-            product_name=product_name or None,
-            category=category or None,
-            brand=get_value("brand") or None,
-            model=get_value("model") or None,
+            product_name=(None if _explicitly_unpublished(product_name) else product_name or None),
+            category=(None if _explicitly_unpublished(category) else category or None),
+            brand=(None if _explicitly_unpublished(get_value("brand"))
+                   else get_value("brand") or None),
+            model=(None if _explicitly_unpublished(get_value("model"))
+                   else get_value("model") or None),
             quantity=quantity,
             quantity_unit=quantity_unit,
             unit_price=_money(get_value("unit_price"),
@@ -281,8 +286,41 @@ def parse_item_tables(
             source_file=source_file,
             source_location=f"table:{table_index}/row:{row_index}",
             source_evidence=" | ".join(value for value in values if value),
+            field_status={},
             **extra,
         )
+        status_raw = {
+            "product_name": product_name,
+            "category": category,
+            "brand": get_value("brand"),
+            "model": get_value("model"),
+            "quantity": get_value("quantity"),
+            "quantity_unit": get_value("quantity"),
+            "unit_price": get_value("unit_price"),
+            "total_price": get_value("total_price"),
+        }
+        status_columns = dict(columns)
+        if "quantity_unit" not in status_columns and "quantity" in columns:
+            status_columns["quantity_unit"] = columns["quantity"]
+            status_raw["quantity_unit"] = get_value("quantity")
+        if total_from_quote:
+            status_columns["total_price"] = quote_column
+            status_raw["total_price"] = values[quote_column]
+        candidate.field_status = {
+            field: _candidate_field_status(field, raw, candidate, status_columns, values)
+            for field, raw in status_raw.items()
+        }
+        evidence_columns = dict(status_columns)
+        candidate.field_evidence = {
+            field: {
+                "source_file": source_file,
+                "source_location": f"{candidate.source_location}/column:{column + 1}",
+                "source_evidence": f"{header[column]}\n{raw}",
+            }
+            for field, raw in status_raw.items()
+            if field in evidence_columns and evidence_columns[field] < len(values)
+            for column in (evidence_columns[field],)
+        }
         if _is_item_data_row(values, columns, candidate):
             if supplier_column_present and not candidate.brand:
                 candidate.extraction_method = "table_header_mapping_supplier_column_unmapped"
@@ -591,6 +629,33 @@ _NON_ITEM_ROW = re.compile(
     r"(?:中标情况|成交情况|评审专家名单|序号|包号|合计|总计|备注|说明)(?:$|[：:]))"
 )
 _REFERENCE_VALUE = re.compile(r"^(?:详?见|具体见|以).*(?:附件|文件|清单|响应|为准).*")
+_EXPLICIT_UNPUBLISHED = {
+    "未公示", "未公布", "未披露", "未提供", "不予公示", "信息未公开", "未公开",
+}
+
+
+def _explicitly_unpublished(value: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", _clean(value))
+    normalized = re.sub(r"[\s：:，,。；;、]+", "", normalized)
+    return normalized in _EXPLICIT_UNPUBLISHED
+
+
+def _candidate_field_status(
+    field: str, raw: str, candidate: ItemCandidate, columns: dict[str, int],
+    row: list[str],
+) -> str:
+    column = columns.get(field)
+    if column is None:
+        return "present" if getattr(candidate, field, None) is not None else "unknown"
+    if column >= len(row):
+        return "unknown"
+    if _explicitly_unpublished(raw):
+        return "explicitly_not_published"
+    if not raw:
+        return "blank_in_source"
+    if getattr(candidate, field, None) is None:
+        return "unverified"
+    return "present"
 
 
 def _is_item_data_row(
@@ -930,6 +995,8 @@ def _pdf_text(
             )
             for item in parsed_items:
                 item.source_location = f"page:{page_number}/{item.source_location}"
+                for evidence in item.field_evidence.values():
+                    evidence["source_location"] = f"page:{page_number}/{evidence['source_location']}"
                 item.extraction_method = "pdfplumber_table_header_mapping"
             items.extend(parsed_items)
             parsed_participants = parse_participant_tables(
@@ -1026,6 +1093,10 @@ def _pdf_text(
                             )
                             for item in parsed:
                                 item.source_location = f'page:{page_number}/ocr/{item.source_location}'
+                                for evidence in item.field_evidence.values():
+                                    evidence['source_location'] = (
+                                        f"page:{page_number}/ocr/{evidence['source_location']}"
+                                    )
                                 item.extraction_method = 'local_ocr_table'
                             items.extend(parsed)
                         warnings.extend(ocr_warnings)
@@ -1189,8 +1260,13 @@ def expand_uploads(files: list[SourceDocument]) -> tuple[list[SourceDocument], l
 
     def visit(document: SourceDocument, depth: int) -> None:
         nonlocal total_bytes
-        source_sha256 = document.source_sha256 or hashlib.sha256(document.content).hexdigest()
-        source_size = document.source_size if document.source_size is not None else len(document.content)
+        computed_sha256 = hashlib.sha256(document.content).hexdigest()
+        if document.source_sha256 is not None and document.source_sha256 != computed_sha256:
+            raise ValueError(f"原始文件 SHA-256 与内容不匹配：{document.filename}")
+        if document.source_size is not None and document.source_size != len(document.content):
+            raise ValueError(f"原始文件字节数与内容不匹配：{document.filename}")
+        source_sha256 = computed_sha256
+        source_size = len(document.content)
         suffix = PurePosixPath(document.filename.replace("\\", "/")).suffix.lower()
         detected = inspect_content(document.content)
         warnings.extend(f"{document.filename}: {message}" for message in detected.warnings)
@@ -1262,42 +1338,90 @@ METADATA_LABELS = {
 }
 
 
-def extract_metadata(text: str) -> NoticeMetadata:
-    """Prefer exact table label/value cells, then bounded colon-labelled lines."""
+def extract_metadata_with_evidence(
+    text: str, *, source_file: str = "",
+) -> tuple[NoticeMetadata, dict[str, dict[str, str]], dict[str, str]]:
+    """Extract exact labelled metadata with the line that supports each value."""
     label_fields = {label: field for field, labels in METADATA_LABELS.items() for label in labels}
     cell_fields = {_header_key(label): field for label, field in label_fields.items()}
     values: dict[str, object] = {}
+    statuses = {field: "unknown" for field in NoticeMetadata.model_fields}
+    evidence: dict[str, dict[str, str]] = {}
 
-    def accept(field: str, raw: str, label: str) -> None:
+    def accept(field: str, raw: str, label: str, line: str, line_number: int) -> None:
         value = _clean(raw).strip(" ：:，,。")
-        if not value or field in values or _REFERENCE_VALUE.fullmatch(value):
+        evidence_line = line.rstrip("\r")
+        if field in values:
             return
+        if not value:
+            if statuses[field] == "unknown":
+                statuses[field] = "blank_in_source"
+                evidence[field] = {
+                    "source_file": source_file,
+                    "source_location": f"text:line:{line_number}",
+                    "source_evidence": evidence_line,
+                }
+            return
+        if _explicitly_unpublished(value):
+            if statuses[field] != "present":
+                statuses[field] = "explicitly_not_published"
+                evidence[field] = {
+                    "source_file": source_file,
+                    "source_location": f"text:line:{line_number}",
+                    "source_evidence": evidence_line,
+                }
+            return
+        if _REFERENCE_VALUE.fullmatch(value):
+            if statuses[field] == "unknown":
+                statuses[field] = "unverified"
+                evidence[field] = {
+                    "source_file": source_file,
+                    "source_location": f"text:line:{line_number}",
+                    "source_evidence": evidence_line,
+                }
+            return
+        parsed: object | None = None
         if field in {"project_budget", "announced_total_award"}:
             amount = _money(value, label)
             if amount is not None:
-                values[field] = amount
+                parsed = amount
         elif field == "project_number":
             # Codes may contain parentheses but cannot include a title suffix.
             code = re.split(r"[）)](?=.*(?:公告|采购项目))", value, maxsplit=1)[0]
             if len(code) <= 120:
-                values[field] = code
+                parsed = code
         elif len(value) <= 160:
-            values[field] = value
+            parsed = value
+        if parsed is not None:
+            values[field] = parsed
+            statuses[field] = "present"
+            evidence[field] = {
+                "source_file": source_file,
+                "source_location": f"text:line:{line_number}",
+                "source_evidence": evidence_line,
+            }
+        elif statuses[field] == "unknown":
+            statuses[field] = "unverified"
+            evidence[field] = {
+                "source_file": source_file,
+                "source_location": f"text:line:{line_number}",
+                "source_evidence": evidence_line,
+            }
 
     lines = text.splitlines()
-    for line in lines:
+    for line_number, line in enumerate(lines, start=1):
         # HTML extraction preserves empty cells and tabs, including 4-column
         # rows containing two key/value pairs. Never join adjacent row values.
-        cells = line.rstrip("\t ").split("\t")
+        cells = line.rstrip(" ").split("\t")
         for index in range(0, len(cells) - 1, 2):
             label, value = cells[index:index + 2]
             field = cell_fields.get(_header_key(label))
             if field and _header_key(value) not in cell_fields:
-                accept(field, value, label)
+                accept(field, value, label, line, line_number)
 
     pattern = "|".join(re.escape(label) for label in sorted(label_fields, key=len, reverse=True))
     labelled = re.compile(rf"(?P<label>{pattern})\s*[：:]\s*")
-    for line in lines:
+    for line_number, line in enumerate(lines, start=1):
         # A label on its own (e.g. 项目名称) is not a value. No whitespace-only
         # fallback: structural table rows were handled above.
         matches = list(labelled.finditer(line))
@@ -1307,5 +1431,10 @@ def extract_metadata(text: str) -> NoticeMetadata:
             raw = re.split(r"[\t；;。]|\s+[\u4e00-\u9fff]{2,16}\s*[：:]|"
                            r"\s*[一二三四五六七八九十]+\s*[、）)]|"
                            r"\s+\d+\s*[、）)]", raw, maxsplit=1)[0]
-            accept(label_fields[match["label"]], raw, match["label"])
-    return NoticeMetadata(**values)
+            accept(label_fields[match["label"]], raw, match["label"], line, line_number)
+    return NoticeMetadata(**values), evidence, statuses
+
+
+def extract_metadata(text: str) -> NoticeMetadata:
+    """Prefer exact table label/value cells, then bounded colon-labelled lines."""
+    return extract_metadata_with_evidence(text)[0]

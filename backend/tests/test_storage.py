@@ -22,6 +22,16 @@ def test_initialize_upgrades_legacy_evidence_columns(tmp_path: Path):
     initialize(database)
 
     with connect(database) as connection:
+        notice_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(notices)")
+        }
+        assert "metadata_evidence_json" in notice_columns
+        assert "metadata_field_status_json" in notice_columns
+        item_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(procurement_items)")
+        }
+        assert "field_status_json" in item_columns
+        assert "field_evidence_json" in item_columns
         for table in ("bid_participations", "awards", "procurement_items"):
             columns = {
                 row["name"] for row in connection.execute(f"PRAGMA table_info({table})")
@@ -117,10 +127,13 @@ def test_notice_detail_returns_saved_evidence_hashes_and_explicit_capability_gap
     assert detail is not None
     assert detail["metadata"]["procurement_unit"] == "采购中心"
     assert detail["metadata_evidence_status"] == "missing"
+    assert detail["metadata_field_status"]["procurement_unit"] == "unverified"
     assert detail["warnings"] == ["PDF 第 2 页 OCR 提示"]
     assert detail["items"][0]["package_code"] == "1"
     assert detail["items"][0]["source_location"] == "page:2/table:1/row:3"
     assert detail["items"][0]["evidence_status"] == "available"
+    assert detail["items"][0]["field_status"]["brand"] == "unknown"
+    assert detail["items"][0]["field_status"]["model"] == "unknown"
     assert detail["items"][0]["source_hash_status"] == "ambiguous"
     assert detail["items"][0]["source_sha256"] is None
     assert detail["bidders"][0]["evidence_status"] == "available"
@@ -134,7 +147,69 @@ def test_notice_detail_returns_saved_evidence_hashes_and_explicit_capability_gap
     historical = next(row for row in detail["source_files"] if row["source_file"] == "historical.pdf")
     assert historical["sha256"] is None
     assert historical["hash_status"] == "not_saved"
+    assert historical["hash_provenance_status"] == "unavailable"
     notice_source = next(row for row in detail["source_files"] if row["source_file"] == "notice.html")
     assert notice_source["sha256"] == hashlib.sha256(raw_source).hexdigest()
     assert notice_source["file_available"] is False
-    assert detail["capabilities"]["explicit_empty_status"] == "not_saved"
+    assert detail["capabilities"]["explicit_empty_status"] == "supported; legacy records are unknown"
+    assert detail["items"][0]["field_status"]["product_name"] == "unverified"
+
+
+def test_saved_metadata_evidence_is_linked_to_file_and_null_status_survives(tmp_path: Path):
+    database = tmp_path / "metadata-evidence.db"
+    raw_source = b"<html>procurement unit source</html>"
+    saved = save_import(
+        database,
+        ImportResult(
+            notice_id=0,
+            source_files=["notice.html"],
+            items_found=1,
+            metadata=NoticeMetadata(procurement_unit="某采购中心"),
+            metadata_evidence={"procurement_unit": {
+                "source_file": "notice.html",
+                "source_location": "text:line:3",
+                "source_evidence": "采购单位：某采购中心",
+            }},
+            metadata_field_status={"procurement_unit": "present"},
+            items=[ItemCandidate(
+                product_name="打印机", source_file="notice.html", source_location="table:1/row:3",
+                field_status={
+                    "brand": "blank_in_source", "model": "explicitly_not_published",
+                },
+                field_evidence={
+                    "brand": {"source_file": "notice.html", "source_location": "table:1/row:3/column:3", "source_evidence": "品牌\n"},
+                    "model": {"source_file": "notice.html", "source_location": "table:1/row:3/column:4", "source_evidence": "规格型号\n未公示"},
+                },
+            )],
+        ),
+        source_documents=[("notice.html", raw_source)],
+    )
+
+    detail = get_notice_detail(database, saved.notice_id)
+
+    assert detail["metadata_field_status"]["procurement_unit"] == "present"
+    assert detail["metadata_evidence"]["procurement_unit"]["source_file"] == "notice.html"
+    assert detail["metadata_evidence"]["procurement_unit"]["source_location"] == "text:line:3"
+    assert detail["metadata_evidence"]["procurement_unit"]["source_sha256"] == hashlib.sha256(raw_source).hexdigest()
+    assert detail["items"][0]["field_status"]["brand"] == "blank_in_source"
+    assert detail["items"][0]["field_status"]["model"] == "explicitly_not_published"
+    assert detail["items"][0]["field_evidence"]["brand"]["source_evidence"] == "品牌\n"
+
+
+def test_legacy_empty_field_status_is_unknown_without_field_evidence(tmp_path: Path):
+    database = tmp_path / "legacy-evidence-status.db"
+    saved = save_import(
+        database,
+        ImportResult(
+            notice_id=0, source_files=["old.html"], items_found=1,
+            metadata=NoticeMetadata(),
+            items=[ItemCandidate(
+                source_file="old.html", source_location="table:1/row:2",
+                field_status={"brand": "explicitly_not_published"},
+            )],
+        ),
+    )
+
+    detail = get_notice_detail(database, saved.notice_id)
+
+    assert detail["items"][0]["field_status"]["brand"] == "unknown"

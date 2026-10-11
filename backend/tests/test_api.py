@@ -81,8 +81,14 @@ def test_upload_html_extracts_items_and_searches(tmp_path, monkeypatch):
         source = detail_payload["source_files"][0]
         assert source["sha256"] == hashlib.sha256(html.encode()).hexdigest()
         assert source["file_available"] is False
-        assert detail_payload["metadata_evidence_status"] == "missing"
-        assert detail_payload["capabilities"]["explicit_empty_status"] == "not_saved"
+        assert detail_payload["metadata_evidence_status"] == "available"
+        buyer_evidence = detail_payload["metadata_evidence"]["procurement_unit"]
+        assert buyer_evidence["source_file"] == "notice.html"
+        assert buyer_evidence["source_location"].startswith("text:line:")
+        assert "采购单位：某市采购中心" in buyer_evidence["source_evidence"]
+        assert buyer_evidence["source_sha256"] == hashlib.sha256(html.encode()).hexdigest()
+        assert detail_payload["metadata_field_status"]["procurement_unit"] == "present"
+        assert detail_payload["capabilities"]["explicit_empty_status"] == "supported; legacy records are unknown"
 
         search = client.get("/api/v1/items", params={"brand": "Canon"})
         assert search.status_code == 200

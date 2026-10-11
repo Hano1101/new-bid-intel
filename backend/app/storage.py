@@ -7,6 +7,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from app.evidence import ITEM_FIELDS, field_state, has_field_evidence
 from app.schemas import ImportResult
 
 SCHEMA = """
@@ -18,6 +19,8 @@ CREATE TABLE IF NOT EXISTS notices (
     procurement_unit TEXT,
     project_budget TEXT,
     announced_total_award TEXT,
+    metadata_evidence_json TEXT NOT NULL DEFAULT '{}',
+    metadata_field_status_json TEXT NOT NULL DEFAULT '{}',
     source_files_json TEXT NOT NULL,
     warnings_json TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -104,6 +107,8 @@ CREATE TABLE IF NOT EXISTS procurement_items (
     source_file TEXT NOT NULL,
     source_location TEXT NOT NULL,
     source_evidence TEXT,
+    field_status_json TEXT NOT NULL DEFAULT '{}',
+    field_evidence_json TEXT NOT NULL DEFAULT '{}',
     extraction_method TEXT NOT NULL,
     confidence REAL NOT NULL DEFAULT 0.0
 );
@@ -111,6 +116,8 @@ CREATE INDEX IF NOT EXISTS idx_items_product_name ON procurement_items(product_n
 CREATE INDEX IF NOT EXISTS idx_items_brand ON procurement_items(brand);
 CREATE INDEX IF NOT EXISTS idx_items_category ON procurement_items(category);
 CREATE INDEX IF NOT EXISTS idx_items_model ON procurement_items(model);
+CREATE INDEX IF NOT EXISTS idx_items_package_id ON procurement_items(package_id);
+CREATE INDEX IF NOT EXISTS idx_projects_buyer_organization ON projects(buyer_organization_id);
 CREATE INDEX IF NOT EXISTS idx_bids_org ON bid_participations(organization_id, package_id);
 CREATE INDEX IF NOT EXISTS idx_awards_org ON awards(organization_id, package_id);
 """
@@ -146,6 +153,28 @@ def initialize(path: Path) -> None:
             }
             if "source_evidence" not in columns:
                 connection.execute(f"ALTER TABLE {table} ADD COLUMN source_evidence TEXT")
+        item_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(procurement_items)")
+        }
+        if "field_status_json" not in item_columns:
+            connection.execute(
+                "ALTER TABLE procurement_items ADD COLUMN field_status_json TEXT NOT NULL DEFAULT '{}'"
+            )
+        if "field_evidence_json" not in item_columns:
+            connection.execute(
+                "ALTER TABLE procurement_items ADD COLUMN field_evidence_json TEXT NOT NULL DEFAULT '{}'"
+            )
+        notice_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(notices)")
+        }
+        if "metadata_evidence_json" not in notice_columns:
+            connection.execute(
+                "ALTER TABLE notices ADD COLUMN metadata_evidence_json TEXT NOT NULL DEFAULT '{}'"
+            )
+        if "metadata_field_status_json" not in notice_columns:
+            connection.execute(
+                "ALTER TABLE notices ADD COLUMN metadata_field_status_json TEXT NOT NULL DEFAULT '{}'"
+            )
         columns = {row["name"] for row in connection.execute("PRAGMA table_info(bid_participations)")}
         if "consortium_members_json" not in columns:
             connection.execute(
@@ -205,14 +234,17 @@ def save_import(
         cursor = connection.execute(
             """INSERT INTO notices (
                 project_name, project_number, procurement_unit, project_budget,
-                announced_total_award, source_files_json, warnings_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                announced_total_award, metadata_evidence_json, metadata_field_status_json,
+                source_files_json, warnings_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 result.metadata.project_name,
                 result.metadata.project_number,
                 result.metadata.procurement_unit,
                 _decimal_text(result.metadata.project_budget),
                 _decimal_text(result.metadata.announced_total_award),
+                json.dumps(result.metadata_evidence, ensure_ascii=False),
+                json.dumps(result.metadata_field_status, ensure_ascii=False),
                 json.dumps(result.source_files, ensure_ascii=False),
                 json.dumps(result.warnings, ensure_ascii=False),
             ),
@@ -222,7 +254,14 @@ def save_import(
             (source_file, hashlib.sha256(content).hexdigest(), len(content))
             for source_file, content in source_documents or []
         }
-        source_records.update(source_hashes or [])
+        for source_file, digest, byte_size in source_hashes or []:
+            if (not isinstance(source_file, str) or not source_file
+                    or not isinstance(digest, str) or len(digest) != 64
+                    or any(char not in "0123456789abcdef" for char in digest)
+                    or not isinstance(byte_size, int) or isinstance(byte_size, bool)
+                    or byte_size < 0):
+                raise ValueError("source hash record is malformed")
+            source_records.add((source_file, digest, byte_size))
         for source_file, digest, byte_size in sorted(source_records):
             connection.execute(
                 """INSERT OR IGNORE INTO notice_sources (
@@ -309,8 +348,9 @@ def save_import(
                 """INSERT INTO procurement_items (
                     notice_id, package_id, product_name, category, brand, model,
                     quantity, quantity_unit, unit_price, total_price, source_file,
-                    source_location, source_evidence, extraction_method, confidence
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_location, source_evidence, field_status_json, field_evidence_json,
+                    extraction_method, confidence
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     notice_id,
                     package_id,
@@ -325,6 +365,8 @@ def save_import(
                     item.source_file,
                     item.source_location,
                     item.source_evidence,
+                    json.dumps(item.field_status, ensure_ascii=False),
+                    json.dumps(item.field_evidence, ensure_ascii=False),
                     item.extraction_method,
                     item.confidence,
                 ),
@@ -376,6 +418,16 @@ def _json_list(value: str | None) -> list:
     return decoded if isinstance(decoded, list) else []
 
 
+def _json_object(value: str | None) -> dict[str, Any]:
+    if not value:
+        return {}
+    try:
+        decoded = json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    return decoded if isinstance(decoded, dict) else {}
+
+
 def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
     """Return only the provenance already stored for one notice."""
     initialize(path)
@@ -388,6 +440,9 @@ def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
         ).fetchone()
         if notice is None:
             return None
+
+        metadata_evidence = _json_object(notice["metadata_evidence_json"])
+        metadata_field_status = _json_object(notice["metadata_field_status_json"])
 
         packages = [dict(row) for row in connection.execute(
             "SELECT id, package_code, package_name FROM packages WHERE project_id = ? ORDER BY id",
@@ -431,6 +486,7 @@ def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
         source_by_name[source["sha256"]] = {
             "source_file": source["source_file"], "sha256": source["sha256"],
             "byte_size": source["byte_size"], "hash_status": "available",
+            "hash_provenance_status": "available",
             "file_available": False,
         }
     file_names = _json_list(notice["source_files_json"])
@@ -439,15 +495,16 @@ def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
         if name and name not in sources_by_name:
             sources_by_name[name] = {"not_saved": {
                 "source_file": name, "sha256": None, "byte_size": None,
-                "hash_status": "not_saved", "file_available": False,
+                "hash_status": "not_saved", "hash_provenance_status": "unavailable",
+                "file_available": False,
             }}
     for name in file_names:
         if isinstance(name, str) and name and name not in sources_by_name:
             sources_by_name[name] = {"not_saved": {
                 "source_file": name, "sha256": None, "byte_size": None,
-                "hash_status": "not_saved", "file_available": False,
+                "hash_status": "not_saved", "hash_provenance_status": "unavailable",
+                "file_available": False,
             }}
-
     for row in [*items, *bidders, *awards]:
         row["evidence_status"] = "available" if (row.get("source_evidence") or "").strip() else "missing"
         matching_sources = list(sources_by_name.get(row.get("source_file") or "", {}).values())
@@ -455,25 +512,79 @@ def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
         if len(matching_hashes) == 1:
             row["source_sha256"] = next(iter(matching_hashes))
             row["source_hash_status"] = "available"
+            row["source_hash_provenance_status"] = "available"
         elif len(matching_hashes) > 1:
             row["source_sha256"] = None
             row["source_hash_status"] = "ambiguous"
+            row["source_hash_provenance_status"] = "ambiguous"
         else:
             row["source_sha256"] = None
             row["source_hash_status"] = "not_saved"
+            row["source_hash_provenance_status"] = "unavailable"
         if "consortium_members_json" in row:
             row["consortium_members"] = _json_list(row.pop("consortium_members_json"))
 
+    for row in items:
+        saved_statuses = _json_object(row.pop("field_status_json", None))
+        row["field_evidence"] = {
+            field: evidence for field, evidence in
+            _json_object(row.pop("field_evidence_json", None)).items()
+            if field in ITEM_FIELDS and has_field_evidence(evidence)
+        }
+        row["field_status"] = {
+            field: field_state(row.get(field), saved_statuses.get(field),
+                               row["field_evidence"].get(field))
+            for field in ITEM_FIELDS
+        }
+
+    metadata = {
+        "project_name": notice["project_name"],
+        "project_number": notice["project_number"],
+        "procurement_unit": notice["procurement_unit"],
+        "project_budget": notice["project_budget"],
+        "announced_total_award": notice["announced_total_award"],
+    }
+    metadata_states: dict[str, str] = {}
+    metadata_evidence = {
+        field: evidence for field, evidence in metadata_evidence.items()
+        if field in metadata and has_field_evidence(evidence)
+    }
+    for field, value in metadata.items():
+        # Legacy NULLs never prove explicit omission; populated values without
+        # a saved field source remain unverified, even if a row excerpt exists.
+        metadata_states[field] = field_state(
+            value, metadata_field_status.get(field), metadata_evidence.get(field),
+        )
+
+    all_field_evidence = [*metadata_evidence.values(), *(
+        evidence for row in items for evidence in row["field_evidence"].values()
+    )]
+    for field_evidence in all_field_evidence:
+        source_name = field_evidence.get("source_file")
+        matching_sources = list(sources_by_name.get(source_name or "", {}).values())
+        hashes = {source.get("sha256") for source in matching_sources if source.get("sha256")}
+        if len(hashes) == 1:
+            field_evidence["source_sha256"] = next(iter(hashes))
+            field_evidence["source_hash_status"] = "available"
+            field_evidence["source_hash_provenance_status"] = "available"
+        elif len(hashes) > 1:
+            field_evidence["source_sha256"] = None
+            field_evidence["source_hash_status"] = "ambiguous"
+            field_evidence["source_hash_provenance_status"] = "ambiguous"
+        else:
+            field_evidence["source_sha256"] = None
+            field_evidence["source_hash_status"] = "not_saved"
+            field_evidence["source_hash_provenance_status"] = "unavailable"
+
     return {
         "notice_id": notice_id,
-        "metadata": {
-            "project_name": notice["project_name"],
-            "project_number": notice["project_number"],
-            "procurement_unit": notice["procurement_unit"],
-            "project_budget": notice["project_budget"],
-            "announced_total_award": notice["announced_total_award"],
-        },
-        "metadata_evidence_status": "missing",
+        "metadata": metadata,
+        "metadata_evidence": metadata_evidence,
+        "metadata_field_status": metadata_states,
+        "metadata_evidence_status": (
+            "available" if any(isinstance(value, dict) for value in metadata_evidence.values())
+            else "missing"
+        ),
         "source_files": [
             source for same_name_sources in sources_by_name.values()
             for source in same_name_sources.values()
@@ -484,9 +595,9 @@ def get_notice_detail(path: Path, notice_id: int) -> dict[str, Any] | None:
         "bidders": bidders,
         "awards": awards,
         "capabilities": {
-            "evidence_granularity": "record_level",
-            "metadata_evidence": "not_saved",
-            "explicit_empty_status": "not_saved",
+            "evidence_granularity": "field_level_when_available; otherwise record_level",
+            "metadata_evidence": "field_level_when_available",
+            "explicit_empty_status": "supported; legacy records are unknown",
             "source_files_retained": False,
         },
     }

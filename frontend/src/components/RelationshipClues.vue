@@ -17,6 +17,7 @@ const emit = defineEmits(['open-notice'])
 const loading = ref(false)
 const error = ref('')
 const payload = ref(null)
+const expandedClues = ref(new Set())
 let version = 0
 const datasetFetch = createDatasetClient(() => props.datasetId, () => version, (...args) => props.fetchImpl(...args))
 
@@ -25,6 +26,8 @@ const endpointUrl = computed(() => {
   return `${props.apiBase}/api/v1/analytics/relation-clues?kind=all`
 })
 const clues = computed(() => Array.isArray(payload.value?.clues) ? payload.value.clues : [])
+const allCluesExpanded = computed(() => clues.value.length > 0
+  && clues.value.every((clue, index) => expandedClues.value.has(clueKey(clue, index))))
 const definitions = computed(() => payload.value?.definitions || payload.value?.semantics || {})
 const scope = computed(() => payload.value?.scope || payload.value?.summary || {})
 const metricLabels = {
@@ -237,6 +240,28 @@ function clueKey(clue, index) {
   return clue?.id ?? clue?.key ?? (String(clue?.type || clue?.clue_type || 'clue') + '-' + index)
 }
 
+function clueDetailsId(index) {
+  return `relationship-clue-details-${index}`
+}
+
+function isClueExpanded(clue, index) {
+  return expandedClues.value.has(clueKey(clue, index))
+}
+
+function toggleClue(clue, index) {
+  const key = clueKey(clue, index)
+  const next = new Set(expandedClues.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedClues.value = next
+}
+
+function toggleAllClues() {
+  expandedClues.value = allCluesExpanded.value
+    ? new Set()
+    : new Set(clues.value.map((clue, index) => clueKey(clue, index)))
+}
+
 async function load() {
   const current = ++version
   loading.value = true
@@ -245,6 +270,7 @@ async function load() {
     const response = await datasetFetch(endpointUrl.value)
     const result = await response.json()
     if (!response.ok) throw new Error(result?.detail || '关系线索读取失败')
+    expandedClues.value = new Set()
     payload.value = result || { clues: [] }
   } catch (cause) {
     if (cause.name === 'AbortError') return
@@ -257,13 +283,132 @@ async function load() {
 
 watch(() => [props.datasetId, props.refreshKey, props.endpoint], () => {
   payload.value = null
+  expandedClues.value = new Set()
   load()
 }, { flush: 'sync' })
 onMounted(load)
 onBeforeUnmount(() => { version += 1 })
 </script>
 
-<template>  <section class="relationship-clues" aria-label="关系待核查线索">    <header class="relationship-clues-heading">      <div>        <p class="eyebrow">RELATIONSHIP REVIEW</p>        <h3>关系线索 · 待核查</h3>        <p class="relationship-clues-intro">线索用于安排人工核查，页面不作事实或责任判断。</p>      </div>      <button type="button" class="secondary" :disabled="loading" @click="load">        {{ loading ? '读取中…' : '刷新线索' }}      </button>    </header>    <p v-if="error" class="relationship-clues-error" role="alert">      {{ error }} <button type="button" class="secondary" @click="load">重试</button>    </p>    <p v-else-if="loading && !payload" class="relationship-clues-empty">正在读取关系线索…</p>    <template v-else>      <div v-if="scope && Object.keys(scope).length" class="relationship-clues-scope">        <span v-if="scope.notice_count != null">公告 {{ scope.notice_count }} 条</span>        <span v-if="scope.project_count != null">项目 {{ scope.project_count }} 个</span>        <span v-if="scope.package_count != null">采购包 {{ scope.package_count }} 个</span>        <span v-if="scope.time_range">时间范围：{{ typeof scope.time_range === 'object' ? timeRangeOf({ time_range: scope.time_range }) : scope.time_range }}</span>      </div>      <div v-if="clues.length" class="relationship-clues-list">        <article v-for="(clue, index) in clues" :key="clueKey(clue, index)" class="relationship-clue-card">          <header class="relationship-clue-card-heading">            <div>              <span class="relationship-clue-type">{{ typeLabel(clue) }}</span>              <h4>{{ clue.title || typeLabel(clue) }}</h4>            </div>            <span class="clue-status">待核查线索</span>          </header>          <p class="relationship-clue-summary">{{ summaryOf(clue) }}</p><div v-if="Object.keys(metricsOf(clue)).length" class="clue-metrics"><span v-for="(value, key) in metricsOf(clue)" :key="key"><strong>{{ value }}</strong><small>{{ key }}</small></span></div>          <div v-if="participantsOf(clue).length" class="clue-block">            <h5>涉及主体</h5>            <div class="clue-pills"><span v-for="(participant, participantIndex) in participantsOf(clue)" :key="`${participantLabel(participant)}-${participantIndex}`">{{ participantLabel(participant) }}</span></div>          </div>          <div class="clue-evidence-grid">            <div class="clue-block">              <h5>构成公告 <span>{{ noticesOf(clue).length }}</span></h5>              <ul v-if="noticesOf(clue).length">                <li v-for="(notice, noticeIndex) in noticesOf(clue)" :key="`${noticeIdOf(notice) ?? 'notice'}-${noticeIndex}`">                  <span>{{ noticeLabel(notice) }}</span>                  <button v-if="noticeIdOf(notice) != null" type="button" class="source-open" @click="openNotice(notice)">查看公告证据</button>                </li>              </ul>              <p v-else class="clue-muted">未记录</p>            </div>            <div class="clue-block">              <h5>构成项目 <span>{{ projectsOf(clue).length }}</span></h5>              <ul v-if="projectsOf(clue).length">                <li v-for="(project, projectIndex) in projectsOf(clue)" :key="`${projectIdOf(project) ?? 'project'}-${projectIndex}`">{{ projectLabel(project) }}</li>              </ul>              <p v-else class="clue-muted">未记录</p>            </div>            <div class="clue-block">              <h5>构成采购包 <span>{{ packagesOf(clue).length }}</span></h5>              <ul v-if="packagesOf(clue).length">                <li v-for="(pack, packageIndex) in packagesOf(clue)" :key="`${packageCodeOf(pack) ?? 'package'}-${packageIndex}`">                  <span>{{ packageLabel(pack) }}</span>                  <small v-if="String(packageCodeOf(pack)).toLowerCase() === 'default'" class="clue-warning-inline">包号来源不足</small>                </li>              </ul>              <p v-else class="clue-muted">未记录</p>            </div>            <div class="clue-block">              <h5>时间范围</h5>              <p>{{ timeRangeOf(clue) }}</p>            </div>          </div>          <div v-if="linksOf(clue).length" class="clue-links">            <h5>公告与证据入口</h5>            <button v-for="(link, linkIndex) in linksOf(clue)" :key="`${noticeIdOf(link) ?? 'link'}-${linkIndex}`" type="button" class="source-open" :disabled="noticeIdOf(link) == null" @click="openNotice(link)">              {{ link.label || link.title || '查看公告与证据' }}<span v-if="noticeIdOf(link) != null"> · 公告 #{{ noticeIdOf(link) }}</span>            </button>          </div>          <div v-if="warningsOf(clue).length" class="clue-warnings">            <h5>数据质量提示</h5>            <p v-for="(warning, warningIndex) in warningsOf(clue)" :key="`${warningText(warning)}-${warningIndex}`" :class="['clue-warning', warningClass(warning)]">{{ warningText(warning) }}</p>          </div>          <p v-else class="clue-no-warning">本条线索未返回 OCR、附件解析或证据不足提示。</p>        </article>      </div>      <p v-else class="relationship-clues-empty">当前数据集暂无可展示的待核查线索。</p>      <section v-if="semanticsEntries(definitions).length" class="relationship-clues-definitions">        <h4>统计口径与解释</h4>        <ul>          <li v-for="(definition, definitionIndex) in semanticsEntries(definitions)" :key="`${semanticLabel(definition)}-${definitionIndex}`">            <strong v-if="semanticLabel(definition)">{{ semanticLabel(definition) }}</strong>            <span>{{ semanticText(definition) || semanticLabel(definition) }}</span>          </li>        </ul>      </section>    </template>  </section>
+<template>
+  <section class="relationship-clues" aria-label="关系待核查线索">
+    <header class="relationship-clues-heading">
+      <div>
+        <p class="eyebrow">RELATIONSHIP REVIEW</p>
+        <h3>关系线索 · 待核查</h3>
+        <p class="relationship-clues-intro">线索用于安排人工核查，页面不作事实或责任判断。</p>
+      </div>
+      <button type="button" class="secondary" :disabled="loading" @click="load">
+        {{ loading ? '读取中…' : '刷新线索' }}
+      </button>
+    </header>
+    <p v-if="error" class="relationship-clues-error" role="alert">
+      {{ error }} <button type="button" class="secondary" @click="load">重试</button>
+    </p>
+    <p v-else-if="loading && !payload" class="relationship-clues-empty">正在读取关系线索…</p>
+    <template v-else>
+      <div v-if="scope && Object.keys(scope).length" class="relationship-clues-scope">
+        <span v-if="scope.notice_count != null">公告 {{ scope.notice_count }} 条</span>
+        <span v-if="scope.project_count != null">项目 {{ scope.project_count }} 个</span>
+        <span v-if="scope.package_count != null">采购包 {{ scope.package_count }} 个</span>
+        <span v-if="scope.time_range">时间范围：{{ typeof scope.time_range === 'object' ? timeRangeOf({ time_range: scope.time_range }) : scope.time_range }}</span>
+      </div>
+      <div v-if="clues.length" id="relationship-clue-list" class="relationship-clues-list">
+        <div class="relationship-clues-toolbar">
+          <button
+            type="button"
+            class="clue-toggle-all"
+            :aria-expanded="allCluesExpanded"
+            aria-controls="relationship-clue-list"
+            @click="toggleAllClues"
+          >{{ allCluesExpanded ? '全部收起' : '全部展开' }}</button>
+        </div>
+        <article v-for="(clue, index) in clues" :key="clueKey(clue, index)" class="relationship-clue-card">
+          <header class="relationship-clue-card-heading">
+            <div class="relationship-clue-title">
+              <span class="relationship-clue-type">{{ typeLabel(clue) }}</span>
+              <h4>{{ clue.title || typeLabel(clue) }}</h4>
+            </div>
+            <div class="relationship-clue-heading-actions">
+              <span class="clue-status">待核查线索</span>
+              <button
+                type="button"
+                class="clue-toggle"
+                :aria-expanded="isClueExpanded(clue, index)"
+                :aria-controls="clueDetailsId(index)"
+                @click="toggleClue(clue, index)"
+              >{{ isClueExpanded(clue, index) ? '收起详情' : '展开详情' }}</button>
+            </div>
+          </header>
+          <div v-if="Object.keys(metricsOf(clue)).length" class="clue-metrics" aria-label="关键统计">
+            <span v-for="(value, key) in metricsOf(clue)" :key="key"><strong>{{ value }}</strong><small>{{ key }}</small></span>
+          </div>
+          <div v-if="isClueExpanded(clue, index)" :id="clueDetailsId(index)" class="relationship-clue-details">
+            <p class="relationship-clue-summary">{{ summaryOf(clue) }}</p>
+            <div v-if="participantsOf(clue).length" class="clue-block">
+              <h5>涉及主体</h5>
+              <div class="clue-pills"><span v-for="(participant, participantIndex) in participantsOf(clue)" :key="`${participantLabel(participant)}-${participantIndex}`">{{ participantLabel(participant) }}</span></div>
+            </div>
+            <div class="clue-evidence-grid">
+              <div class="clue-block">
+                <h5>构成公告 <span>{{ noticesOf(clue).length }}</span></h5>
+                <ul v-if="noticesOf(clue).length">
+                  <li v-for="(notice, noticeIndex) in noticesOf(clue)" :key="`${noticeIdOf(notice) ?? 'notice'}-${noticeIndex}`">
+                    <span>{{ noticeLabel(notice) }}</span>
+                    <button v-if="noticeIdOf(notice) != null" type="button" class="source-open" @click="openNotice(notice)">查看公告证据</button>
+                  </li>
+                </ul>
+                <p v-else class="clue-muted">未记录</p>
+              </div>
+              <div class="clue-block">
+                <h5>构成项目 <span>{{ projectsOf(clue).length }}</span></h5>
+                <ul v-if="projectsOf(clue).length">
+                  <li v-for="(project, projectIndex) in projectsOf(clue)" :key="`${projectIdOf(project) ?? 'project'}-${projectIndex}`">{{ projectLabel(project) }}</li>
+                </ul>
+                <p v-else class="clue-muted">未记录</p>
+              </div>
+              <div class="clue-block">
+                <h5>构成采购包 <span>{{ packagesOf(clue).length }}</span></h5>
+                <ul v-if="packagesOf(clue).length">
+                  <li v-for="(pack, packageIndex) in packagesOf(clue)" :key="`${packageCodeOf(pack) ?? 'package'}-${packageIndex}`">
+                    <span>{{ packageLabel(pack) }}</span>
+                    <small v-if="String(packageCodeOf(pack)).toLowerCase() === 'default'" class="clue-warning-inline">包号来源不足</small>
+                  </li>
+                </ul>
+                <p v-else class="clue-muted">未记录</p>
+              </div>
+              <div class="clue-block">
+                <h5>时间范围</h5>
+                <p>{{ timeRangeOf(clue) }}</p>
+              </div>
+            </div>
+            <div v-if="linksOf(clue).length" class="clue-links">
+              <h5>公告与证据入口</h5>
+              <button v-for="(link, linkIndex) in linksOf(clue)" :key="`${noticeIdOf(link) ?? 'link'}-${linkIndex}`" type="button" class="source-open" :disabled="noticeIdOf(link) == null" @click="openNotice(link)">
+                {{ link.label || link.title || '查看公告与证据' }}<span v-if="noticeIdOf(link) != null"> · 公告 #{{ noticeIdOf(link) }}</span>
+              </button>
+            </div>
+            <div v-if="warningsOf(clue).length" class="clue-warnings">
+              <h5>数据质量提示</h5>
+              <p v-for="(warning, warningIndex) in warningsOf(clue)" :key="`${warningText(warning)}-${warningIndex}`" :class="['clue-warning', warningClass(warning)]">{{ warningText(warning) }}</p>
+            </div>
+            <p v-else class="clue-no-warning">本条线索未返回 OCR、附件解析或证据不足提示。</p>
+          </div>
+          <div v-else :id="clueDetailsId(index)" hidden></div>
+        </article>
+      </div>
+      <p v-else class="relationship-clues-empty">当前数据集暂无可展示的待核查线索。</p>
+      <section v-if="semanticsEntries(definitions).length" class="relationship-clues-definitions">
+        <h4>统计口径与解释</h4>
+        <ul>
+          <li v-for="(definition, definitionIndex) in semanticsEntries(definitions)" :key="`${semanticLabel(definition)}-${definitionIndex}`">
+            <strong v-if="semanticLabel(definition)">{{ semanticLabel(definition) }}</strong>
+            <span>{{ semanticText(definition) || semanticLabel(definition) }}</span>
+          </li>
+        </ul>
+      </section>
+    </template>
+  </section>
 </template>
 
 <style scoped>.relationship-clues { margin-top: 1.25rem; border: 1px solid #d9e2dc; border-radius: 18px; background: #fff; overflow: hidden; }
@@ -273,11 +418,18 @@ onBeforeUnmount(() => { version += 1 })
 .relationship-clues-scope { display:flex; flex-wrap:wrap; gap:.45rem; padding:.75rem 1.25rem; border-bottom:1px solid #edf1ee; color:#557066; font-size:.75rem; }
 .relationship-clues-scope span { padding:.25rem .55rem; border-radius:999px; background:#f1f6f2; }
 .relationship-clues-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.8rem; padding:1rem 1.25rem; }
+.relationship-clues-toolbar { grid-column:1/-1; display:flex; justify-content:flex-end; }
+.clue-toggle-all,.clue-toggle { border:1px solid #d8e5dc; border-radius:7px; padding:.35rem .55rem; background:#fff; color:#356253; font-size:.72rem; cursor:pointer; }
+.clue-toggle-all:hover,.clue-toggle:hover { background:#f1f6f2; }
+.clue-toggle-all:focus-visible,.clue-toggle:focus-visible { outline:2px solid #0b7c60; outline-offset:2px; }
 .relationship-clue-card { border:1px solid #e1e9e3; border-radius:12px; padding:1rem; background:#fcfdfc; min-width:0; }
 .relationship-clue-card-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:.7rem; }
+.relationship-clue-title { min-width:0; }
+.relationship-clue-heading-actions { display:grid; justify-items:end; gap:.4rem; flex:none; }
 .relationship-clue-type { color:#0b7c60; font:10px var(--mono); letter-spacing:.04em; }
 .relationship-clue-card h4 { margin:.25rem 0 0; color:#34433d; font-size:.94rem; }
 .clue-status { flex:none; padding:.22rem .48rem; border-radius:999px; color:#775a13; background:#fff6d9; font-size:.68rem; }
+.relationship-clue-details { margin-top:.65rem; padding-top:.1rem; border-top:1px solid #edf1ee; }
 .relationship-clue-summary { margin:.7rem 0; color:#5b6d64; font-size:.8rem; line-height:1.55; }
 .clue-metrics { display:flex; flex-wrap:wrap; gap:.4rem; margin:.55rem 0 .8rem; }
 .clue-metrics span { display:grid; gap:.1rem; padding:.35rem .5rem; border-radius:6px; background:#f1f5f2; color:#557066; }

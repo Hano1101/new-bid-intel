@@ -5,6 +5,7 @@ import pytest
 from app.parsers import (
     SourceDocument,
     expand_uploads,
+    extract_metadata_with_evidence,
     parse_document,
     parse_document_with_participants,
     parse_item_tables,
@@ -456,3 +457,48 @@ def test_participant_aware_parse_api_preserves_legacy_parse_document_shape():
 
     assert (text, items, warnings) == (detailed_text, detailed_items, detailed_warnings)
     assert len(participants) == 1
+
+
+def test_field_state_only_marks_an_explicit_unpublished_marker_as_such():
+    html = """<table><tr><th>品目名称</th><th>采购标的</th><th>品牌</th><th>规格型号</th>
+      <th>数量</th><th>单价</th><th>总价</th></tr>
+      <tr><td>办公设备</td><td>打印机</td><td></td><td>未公示</td><td>1台</td><td>100</td><td>100</td></tr>
+    </table>""".encode()
+    _, items, _, _ = parse_document_with_participants(SourceDocument("notice.html", html))
+
+    assert len(items) == 1
+    assert items[0].brand is None
+    assert items[0].field_status["brand"] == "blank_in_source"
+    assert items[0].model is None
+    assert items[0].field_status["model"] == "explicitly_not_published"
+    assert items[0].field_status["product_name"] == "present"
+    assert items[0].field_evidence["brand"]["source_evidence"] == "品牌\n"
+    assert items[0].field_evidence["model"]["source_evidence"] == "规格型号\n未公示"
+    assert items[0].field_evidence["quantity_unit"]["source_evidence"] == "数量\n1台"
+    assert items[0].field_evidence["total_price"]["source_evidence"] == "总价\n100"
+
+
+def test_metadata_evidence_requires_an_exact_label_and_keeps_blank_unknown_distinct():
+    metadata, evidence, statuses = extract_metadata_with_evidence(
+        "项目名称：采购中心办公设备项目\n采购单位：未公示", source_file="notice.html",
+    )
+
+    assert metadata.project_name == "采购中心办公设备项目"
+    assert metadata.procurement_unit is None
+    assert evidence["procurement_unit"]["source_file"] == "notice.html"
+    assert evidence["procurement_unit"]["source_location"] == "text:line:2"
+    assert "采购单位：未公示" in evidence["procurement_unit"]["source_evidence"]
+    assert statuses["procurement_unit"] == "explicitly_not_published"
+
+    title_only, title_evidence, title_status = extract_metadata_with_evidence(
+        "项目名称：某某采购单位信息化项目", source_file="notice.html",
+    )
+    assert title_only.procurement_unit is None
+    assert "procurement_unit" not in title_evidence
+    assert title_status["procurement_unit"] == "unknown"
+
+    _, blank_evidence, blank_status = extract_metadata_with_evidence(
+        "采购单位\t", source_file="notice.html",
+    )
+    assert blank_status["procurement_unit"] == "blank_in_source"
+    assert blank_evidence["procurement_unit"]["source_evidence"] == "采购单位\t"

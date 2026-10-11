@@ -13,6 +13,7 @@ from app.attachment_scope import (
 )
 from app.candidate_reconciliation import reconcile_candidates
 from app.config import Settings, effective_settings
+from app.evidence import carry_field_evidence
 from app.model_adapter import extract_unstructured_items
 from app.package_codes import (
     DEFAULT_PACKAGE_CODE,
@@ -23,7 +24,7 @@ from app.package_codes import (
 from app.parsers import (
     SourceDocument,
     expand_uploads,
-    extract_metadata,
+    extract_metadata_with_evidence,
     parse_document,
     parse_document_with_participants,
 )
@@ -316,7 +317,7 @@ def _merge_model_items(
         changes.update(extraction_method="hybrid_source_verified",
                        source_evidence="\n".join(dict.fromkeys(filter(None, (
                            row.source_evidence, candidate.source_evidence)))))
-        result[index] = row.model_copy(update=changes)
+        result[index] = carry_field_evidence(row, changes, candidate)
     return result
 
 
@@ -454,7 +455,7 @@ def _deduplicate(
                        if getattr(merged, field) is None and getattr(row, field) is not None}
             if merged.package_code == 'default' and row.package_code != 'default':
                 changes['package_code'] = row.package_code
-            merged = merged.model_copy(update=changes)
+            merged = carry_field_evidence(merged, changes, row)
             evidence.append(f'[{row.source_file} @ {row.source_location}]\n'
                             + (row.source_evidence or ''))
         same_source = len({items[index].source_file for index in indices}) == 1
@@ -588,9 +589,9 @@ def _ingest_expanded(
 
     items: list[ItemCandidate] = []
     participants: list[ParticipantCandidate] = []
-    texts: list[str] = []
     source_texts: dict[str, str] = {}
     source_metadata: dict[str, NoticeMetadata] = {}
+    metadata_sources: list[tuple[str, NoticeMetadata, dict[str, dict[str, str]], dict[str, str]]] = []
     model_metadata = NoticeMetadata()
     model_settings = model_settings or effective_settings()
     mode = extraction_mode or model_settings.extraction_mode
@@ -649,14 +650,20 @@ def _ingest_expanded(
         # must not establish whole-document package aliases or source links.
         if text and (scope is None or (scope.extract_items and scope.scope != "mixed")):
             source_texts[document.filename] = text
-        local_metadata = (
-            extract_metadata(text) if mode != "model" and allow_metadata else NoticeMetadata()
+        parsed_metadata, parsed_metadata_evidence, parsed_metadata_status = (
+            extract_metadata_with_evidence(text, source_file=document.filename)
+            if allow_metadata else (NoticeMetadata(), {}, {})
         )
+        local_metadata = parsed_metadata if mode != "model" and allow_metadata else NoticeMetadata()
         if text and allow_metadata:
+            metadata_record = (
+                document.filename, parsed_metadata, parsed_metadata_evidence,
+                parsed_metadata_status,
+            )
             if document == primary_document:
-                texts.insert(0, text)
+                metadata_sources.insert(0, metadata_record)
             else:
-                texts.append(text)
+                metadata_sources.append(metadata_record)
         if text and model_is_configured and mode != "rules":
             include_participants = True
             parsed_metadata, model_items, model_participants, model_warnings = (
@@ -697,8 +704,8 @@ def _ingest_expanded(
         warnings.extend(parse_warnings)
     rule_metadata = {}
     if mode != "model":
-        for text in texts:
-            for field, value in extract_metadata(text).model_dump().items():
+        for _, parsed, _, _ in metadata_sources:
+            for field, value in parsed.model_dump().items():
                 if value is not None:
                     rule_metadata.setdefault(field, value)
     metadata = NoticeMetadata(**rule_metadata)
@@ -707,7 +714,39 @@ def _ingest_expanded(
                 else getattr(model_metadata, field))
         for field in NoticeMetadata.model_fields
     }
+    # Evidence is additive: an unmatched model value remains unverified, not
+    # deleted or silently replaced by a rule value in the model-only route.
     metadata = NoticeMetadata(**metadata_values)
+    metadata_evidence: dict[str, dict[str, str]] = {}
+    metadata_field_status: dict[str, str] = {}
+    for field in NoticeMetadata.model_fields:
+        value = getattr(metadata, field)
+        matching = next((record for record in metadata_sources
+                         if getattr(record[1], field) is not None
+                         and getattr(record[1], field) == value), None)
+        if matching is not None:
+            metadata_evidence[field] = matching[2][field]
+            metadata_field_status[field] = "present"
+            continue
+        states = [record[3].get(field, "unknown") for record in metadata_sources]
+        if value is not None or "present" in states or "unverified" in states:
+            metadata_field_status[field] = "unverified"
+        elif "explicitly_not_published" in states:
+            metadata_field_status[field] = "explicitly_not_published"
+            evidence_source = next(record for record in metadata_sources
+                                   if record[3].get(field) == "explicitly_not_published")
+            if field in evidence_source[2]:
+                metadata_evidence[field] = evidence_source[2][field]
+        elif "blank_in_source" in states:
+            metadata_field_status[field] = "blank_in_source"
+            evidence_source = next(record for record in metadata_sources
+                                   if record[3].get(field) == "blank_in_source")
+            if field in evidence_source[2]:
+                metadata_evidence[field] = evidence_source[2][field]
+        elif "unverified" in states:
+            metadata_field_status[field] = "unverified"
+        else:
+            metadata_field_status[field] = "unknown"
     if mode == "rules":
         warnings.append("规则基线：不调用模型；提取表格标的、明确投标主体及标签元数据")
     elif not model_is_configured:
@@ -725,6 +764,8 @@ def _ingest_expanded(
         items=deduplicated_items,
         items_found=len(deduplicated_items),
         metadata=metadata,
+        metadata_evidence=metadata_evidence,
+        metadata_field_status=metadata_field_status,
         participants=deduplicated_participants,
         warnings=list(dict.fromkeys(warnings)),
     )

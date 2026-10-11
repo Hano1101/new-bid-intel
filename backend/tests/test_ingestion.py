@@ -2,6 +2,8 @@ import hashlib
 import io
 import zipfile
 
+import pytest
+
 from app.ingestion import import_batch
 from app.parsers import SourceDocument
 from app.storage import count_notices, get_notice_detail, search_items
@@ -26,7 +28,8 @@ def test_batch_import_groups_notice_and_matching_attachment_zips(tmp_path):
         archive.writestr("notice-2附件.zip", attachment.getvalue())
 
     database = tmp_path / "batch.db"
-    result = import_batch([SourceDocument("dataset.zip", batch.getvalue())], database)
+    raw_archive = batch.getvalue()
+    result = import_batch([SourceDocument("dataset.zip", raw_archive)], database)
     assert result.notices_found == 2
     assert result.notices_imported == 2
     assert result.total_items_found == 2
@@ -40,4 +43,19 @@ def test_batch_import_groups_notice_and_matching_attachment_zips(tmp_path):
     html_source = next(row for row in detail["source_files"] if row["source_file"].endswith("notice-1.html"))
     attachment_source = next(row for row in detail["source_files"] if row["source_file"].endswith("details.txt"))
     assert html_source["sha256"] == hashlib.sha256(_notice("项目甲", "打印机").encode()).hexdigest()
+    assert html_source["sha256"] != hashlib.sha256(raw_archive).hexdigest()
     assert attachment_source["sha256"] == hashlib.sha256("附件补充文本".encode()).hexdigest()
+    assert html_source["hash_provenance_status"] == "available"
+    assert html_source["file_available"] is False
+    assert detail["metadata"]["procurement_unit"] is None
+    assert detail["metadata_field_status"]["procurement_unit"] == "unknown"
+    assert "procurement_unit" not in detail["metadata_evidence"]
+    assert detail["items"][0]["field_status"]["brand"] == "present"
+
+
+def test_import_rejects_a_source_hash_that_does_not_match_the_uploaded_bytes():
+    content = b"<html>source</html>"
+    bad = SourceDocument("notice.html", content, hashlib.sha256(b"different").hexdigest(), len(content))
+
+    with pytest.raises(ValueError, match="SHA-256 与内容不匹配"):
+        import_batch([bad], None)

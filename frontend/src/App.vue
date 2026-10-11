@@ -6,6 +6,7 @@ import AuthGate from './components/AuthGate.vue'
 import NoticeEvidenceDialog from './components/NoticeEvidenceDialog.vue'
 import RelationshipClues from './components/RelationshipClues.vue'
 import ControlledQuery from './components/ControlledQuery.vue'
+import ReviewQueue from './components/ReviewQueue.vue'
 import { resolveApiBase } from './utils/browser.js'
 import { createDatasetClient } from './utils/datasets.js'
 import { formatAmount } from './utils/amountPolicy.js'
@@ -583,6 +584,14 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncSectionFromHa
         </table>
       </div>
     </section>
+
+    <ReviewQueue
+      v-if="datasetReady && activeSection === 'review'"
+      :api-base="apiBase"
+      :dataset-id="datasetId"
+      :fetch-impl="apiFetch"
+      @open-notice="openNoticeDetail($event.noticeId, $event.itemId || null)"
+    />
 
     <NoticeEvidenceDialog
       :notice="noticeDetail"

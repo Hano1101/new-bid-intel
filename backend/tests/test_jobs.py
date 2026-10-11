@@ -273,6 +273,354 @@ def test_api_dataset_scope_and_directory_guard(tmp_path, monkeypatch):
         assert jobs.read_json(root / 'job.json')['status'] == 'stopped'
 
 
+def test_job_directory_browser_navigates_only_inside_configured_root(tmp_path, monkeypatch):
+    intake = tmp_path / 'intake'
+    nested = intake / 'first' / 'second'
+    nested.mkdir(parents=True)
+    (nested / 'notice.html').write_text(HTML, encoding='utf-8')
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'secret.html').write_text(HTML, encoding='utf-8')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+
+    with TestClient(app) as client:
+        root = client.get('/api/v1/jobs/directories')
+        first = client.get('/api/v1/jobs/directories?directory_id=first')
+        second = client.get('/api/v1/jobs/directories?directory_id=first%2Fsecond')
+        traversal = client.get('/api/v1/jobs/directories?directory_id=..')
+        absolute = client.get('/api/v1/jobs/directories', params={'directory_id': str(outside)})
+
+    assert root.status_code == first.status_code == second.status_code == 200
+    assert [row['directory_id'] for row in root.json()['directories']] == ['first']
+    assert first.json()['parent_directory_id'] == ''
+    assert [row['directory_id'] for row in first.json()['directories']] == ['first/second']
+    assert second.json()['parent_directory_id'] == 'first'
+    assert second.json()['directories'] == []
+    assert traversal.status_code == absolute.status_code == 400
+
+
+@pytest.mark.parametrize('directory_id', [
+    '..', '../intake-extra', 'first/../../intake-extra', '.', 'first//second',
+    '/outside', 'C:/outside', 'first\\second',
+])
+def test_job_directory_traversal_rejected_by_all_picker_endpoints(
+    tmp_path, monkeypatch, directory_id,
+):
+    intake = tmp_path / 'intake'
+    (intake / 'first' / 'second').mkdir(parents=True)
+    (tmp_path / 'intake-extra').mkdir()
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+
+    with TestClient(app) as client:
+        browse = client.get('/api/v1/jobs/directories', params={'directory_id': directory_id})
+        preview = client.get('/api/v1/jobs/preflight', params={'directory_id': directory_id})
+        create = client.post('/api/v1/jobs', json={'directory_id': directory_id})
+
+    assert browse.status_code == preview.status_code == create.status_code == 400
+
+
+def test_job_directory_symlink_escape_is_rejected(tmp_path, monkeypatch):
+    intake = tmp_path / 'intake'
+    intake.mkdir()
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    try:
+        (intake / 'escape').symlink_to(outside, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f'directory symlinks are unavailable: {exc}')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+
+    with TestClient(app) as client:
+        root = client.get('/api/v1/jobs/directories')
+        browse = client.get('/api/v1/jobs/directories?directory_id=escape')
+        preview = client.get('/api/v1/jobs/preflight?directory_id=escape')
+        create = client.post('/api/v1/jobs', json={'directory_id': 'escape'})
+
+    assert root.json()['directories'] == []
+    assert browse.status_code == preview.status_code == create.status_code == 400
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows junction behavior')
+def test_job_directory_junction_escape_and_loop_are_not_scanned(tmp_path, monkeypatch):
+    intake = tmp_path / 'intake'
+    source = intake / 'batch'
+    source.mkdir(parents=True)
+    (source / 'notice.html').write_bytes(b'notice')
+    outside = tmp_path / 'outside'
+    outside.mkdir()
+    (outside / 'secret.txt').write_bytes(b'outside content')
+    links = [(source / 'escape', outside), (source / 'loop', source)]
+    created_links = []
+    try:
+        for link, target in links:
+            result = subprocess.run(
+                ['cmd', '/c', 'mklink', '/J', str(link), str(target)],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode:
+                pytest.skip('Windows junction creation is unavailable')
+            created_links.append(link)
+        monkeypatch.setattr(settings, 'intake_root', str(intake))
+        with TestClient(app) as client:
+            browse = client.get('/api/v1/jobs/directories?directory_id=batch')
+            preview = client.get('/api/v1/jobs/preflight?directory_id=batch')
+            escape = client.get('/api/v1/jobs/directories?directory_id=batch/escape')
+            unsafe_create = client.post('/api/v1/jobs', json={'directory_id': 'batch/escape'})
+        assert browse.status_code == preview.status_code == 200
+        assert browse.json()['directories'] == []
+        assert preview.json()['directory_bytes'] == len(b'notice')
+        assert preview.json()['directory_file_count'] == 1
+        assert preview.json()['skipped_symlink_count'] == 2
+        assert escape.status_code == unsafe_create.status_code == 400
+    finally:
+        for link in created_links:
+            link.rmdir()  # Remove the test junction itself; never remove its target.
+
+
+def test_job_directory_preflight_matches_top_level_scan_and_counts_recursive_bytes(
+    tmp_path, monkeypatch,
+):
+    intake = tmp_path / 'intake'
+    source = intake / 'batch'
+    source.mkdir(parents=True)
+    (source / 'alpha.html').write_bytes(b'html')
+    (source / 'alpha.zip').write_bytes(b'zip')
+    (source / 'alpha.rar').write_bytes(b'rar')
+    (source / 'beta.htm').write_bytes(b'htm')
+    (source / 'beta.7z').write_bytes(b'7z')
+    (source / 'orphan.zip').write_bytes(b'orphan')
+    (source / 'ignored.txt').write_bytes(b'ignored')
+    (source / 'nested').mkdir()
+    (source / 'nested' / 'nested.html').write_bytes(b'nested html')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+
+    with TestClient(app) as client:
+        result = client.get('/api/v1/jobs/preflight?directory_id=batch')
+
+    assert result.status_code == 200
+    preview = result.json()
+    assert preview['html_count'] == 2
+    assert preview['paired_archive_count'] == 3
+    assert preview['notices_with_attachments'] == 2
+    assert preview['unpaired_material_count'] == 1
+    assert preview['unpaired_materials'] == ['orphan.zip']
+    assert preview['notices'] == [
+        {'html': 'alpha.html', 'attachments': ['alpha.zip', 'alpha.rar']},
+        {'html': 'beta.htm', 'attachments': ['beta.7z']},
+    ]
+    assert preview['directory_bytes'] == sum(map(len, [
+        b'html', b'zip', b'rar', b'htm', b'7z', b'orphan', b'ignored', b'nested html',
+    ]))
+    assert preview['top_level_scan_only'] is True
+    assert '不会递归处理子目录' in preview['scan_note']
+    assert preview['can_start'] is True
+
+
+def test_job_directory_preflight_empty_directory_and_non_directory_errors(tmp_path, monkeypatch):
+    intake = tmp_path / 'intake'
+    (intake / 'empty').mkdir(parents=True)
+    (intake / 'file.txt').write_text('plain', encoding='utf-8')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+
+    with TestClient(app) as client:
+        empty = client.get('/api/v1/jobs/preflight?directory_id=empty')
+        non_directory = client.get('/api/v1/jobs/directories?directory_id=file.txt')
+        missing = client.get('/api/v1/jobs/directories?directory_id=missing')
+        non_directory_preview = client.get('/api/v1/jobs/preflight?directory_id=file.txt')
+        non_directory_create = client.post('/api/v1/jobs', json={'directory_id': 'file.txt'})
+
+    assert empty.status_code == 200
+    assert empty.json()['html_count'] == 0
+    assert empty.json()['directory_bytes'] == 0
+    assert empty.json()['can_start'] is False
+    assert non_directory.status_code == missing.status_code == 400
+    assert non_directory_preview.status_code == non_directory_create.status_code == 400
+
+
+def test_job_preflight_matches_manifest_case_behavior(tmp_path, monkeypatch):
+    intake = tmp_path / 'intake'
+    intake.mkdir()
+    for name in ('lower.html', 'lower.7z', 'upper.HTML', 'upper.ZIP', 'orphan.RAR'):
+        (intake / name).write_bytes(b'synthetic material')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+    dataset = create_dataset(DatasetCreate(name='case behavior'))
+    job = jobs.create_job(intake, resolve_database(dataset['id']), dataset['id'],
+                          mode='rules', ocr=False)
+    manifest = jobs.read_json(jobs.job_path(job['id']) / 'manifest.json')
+
+    with TestClient(app) as client:
+        result = client.get('/api/v1/jobs/preflight')
+
+    assert result.status_code == 200
+    preview = result.json()
+    assert preview['notices'] == [
+        {'html': row['files'][0]['name'],
+         'attachments': [attachment['name'] for attachment in row['files'][1:]]}
+        for row in manifest
+    ]
+    assert preview['unpaired_materials'] == (['orphan.RAR'] if os.name == 'nt' else [])
+
+
+def test_job_directory_routes_return_clear_errors_for_unreadable_directories(tmp_path, monkeypatch):
+    from app import jobs_api
+
+    intake = tmp_path / 'intake'
+    blocked = intake / 'blocked'
+    blocked.mkdir(parents=True)
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+    original_iterdir = Path.iterdir
+
+    def deny_blocked_directory(path):
+        if path == blocked:
+            raise PermissionError('synthetic permission error')
+        return original_iterdir(path)
+
+    monkeypatch.setattr(jobs_api.Path, 'iterdir', deny_blocked_directory)
+    with TestClient(app) as client:
+        browse = client.get('/api/v1/jobs/directories?directory_id=blocked')
+        preview = client.get('/api/v1/jobs/preflight?directory_id=blocked')
+
+    assert browse.status_code == preview.status_code == 400
+    assert '目录权限' in browse.json()['detail']
+    assert '目录权限' in preview.json()['detail']
+
+
+def test_job_browser_and_create_require_intake_root_configuration(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, 'intake_root', '')
+    with TestClient(app) as client:
+        browse = client.get('/api/v1/jobs/directories')
+        preview = client.get('/api/v1/jobs/preflight')
+        create = client.post('/api/v1/jobs', json={'directory_id': ''})
+
+    assert browse.status_code == preview.status_code == create.status_code == 503
+    assert 'INTAKE_ROOT' in browse.json()['detail']
+    assert 'INTAKE_ROOT' in create.json()['detail']
+
+
+@pytest.mark.parametrize('root_kind', ['missing', 'file'])
+def test_job_picker_rejects_invalid_intake_root(tmp_path, monkeypatch, root_kind):
+    root = tmp_path / 'invalid-root'
+    if root_kind == 'file':
+        root.write_bytes(b'not a directory')
+    monkeypatch.setattr(settings, 'intake_root', str(root))
+    with TestClient(app) as client:
+        browse = client.get('/api/v1/jobs/directories')
+        preview = client.get('/api/v1/jobs/preflight')
+        create = client.post('/api/v1/jobs', json={'directory_id': ''})
+    assert browse.status_code == preview.status_code == create.status_code == 503
+
+
+def test_job_start_keeps_dataset_scope_and_legacy_path_compatibility(tmp_path, monkeypatch):
+    from app import jobs_api
+
+    intake = tmp_path / 'intake'
+    source = intake / 'batch'
+    source.mkdir(parents=True)
+    legacy_source = intake / 'legacy'
+    legacy_source.mkdir()
+    (legacy_source / 'legacy.html').write_text(HTML, encoding='utf-8')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+    monkeypatch.setattr(jobs_api, 'launch', lambda _root: None)
+    dataset = create_dataset(DatasetCreate(name='directory picker isolation'))
+    headers = {'X-Dataset-ID': dataset['id']}
+
+    with TestClient(app) as client:
+        (source / 'notice.html').write_text(HTML, encoding='utf-8')
+        preflight = client.get('/api/v1/jobs/preflight?directory_id=batch', headers=headers)
+        created = client.post('/api/v1/jobs', json={
+            'directory_id': 'batch',
+            'preflight_fingerprint': preflight.json()['preflight_fingerprint'],
+            'mode': 'rules',
+        }, headers=headers)
+        legacy_created = client.post(
+            '/api/v1/jobs', json={'source_directory': str(legacy_source), 'mode': 'rules'},
+            headers=headers,
+        )
+        same_dataset_jobs = client.get('/api/v1/jobs', headers=headers)
+        other_dataset_jobs = client.get('/api/v1/jobs')
+        other_dataset_detail = client.get('/api/v1/jobs/' + created.json()['id'])
+        other_dataset_resume = client.post('/api/v1/jobs/' + created.json()['id'] + '/resume')
+        unknown_dataset_browse = client.get(
+            '/api/v1/jobs/directories', headers={'X-Dataset-ID': '0' * 32},
+        )
+        unknown_dataset_preview = client.get(
+            '/api/v1/jobs/preflight', headers={'X-Dataset-ID': '0' * 32},
+        )
+
+    assert created.status_code == legacy_created.status_code == 202
+    assert same_dataset_jobs.status_code == other_dataset_jobs.status_code == 200
+    assert {job['id'] for job in same_dataset_jobs.json()} == {
+        created.json()['id'], legacy_created.json()['id'],
+    }
+    assert other_dataset_jobs.json() == []
+    assert other_dataset_detail.status_code == other_dataset_resume.status_code == 404
+    assert unknown_dataset_browse.status_code == unknown_dataset_preview.status_code == 404
+
+
+def test_job_start_rejects_stale_or_missing_directory_preflight(tmp_path, monkeypatch):
+    from app import jobs_api
+
+    intake = tmp_path / 'intake'
+    intake.mkdir()
+    notice = intake / 'notice.html'
+    notice.write_text(HTML, encoding='utf-8')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+    launches = []
+    monkeypatch.setattr(jobs_api, 'launch', launches.append)
+
+    with TestClient(app) as client:
+        preflight = client.get('/api/v1/jobs/preflight')
+        assert preflight.status_code == 200
+        fingerprint = preflight.json()['preflight_fingerprint']
+        assert client.post('/api/v1/jobs', json={'directory_id': ''}).status_code == 422
+
+        notice.write_text(HTML + '<!-- added after confirmation -->', encoding='utf-8')
+        stale = client.post('/api/v1/jobs', json={
+            'directory_id': '', 'preflight_fingerprint': fingerprint,
+        })
+        assert stale.status_code == 409
+        assert '重新预检' in stale.json()['detail']
+        assert launches == []
+        assert client.get('/api/v1/jobs').json() == []
+
+        current = client.get('/api/v1/jobs/preflight').json()
+        created = client.post('/api/v1/jobs', json={
+            'directory_id': '', 'preflight_fingerprint': current['preflight_fingerprint'],
+            'mode': 'rules',
+        })
+        assert created.status_code == 202, created.text
+        assert launches == [jobs_api.job_path(created.json()['id'])]
+
+
+@pytest.mark.parametrize('linked_name', ['notice.html', 'notice.zip'])
+def test_job_preflight_and_start_reject_linked_material(tmp_path, monkeypatch, linked_name):
+    from app import jobs_api
+
+    intake = tmp_path / 'intake'
+    intake.mkdir()
+    external = tmp_path / 'external'
+    external.write_bytes(b'linked material')
+    if linked_name != 'notice.html':
+        (intake / 'notice.html').write_text(HTML, encoding='utf-8')
+    try:
+        (intake / linked_name).symlink_to(external)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f'file symlinks are unavailable: {exc}')
+    monkeypatch.setattr(settings, 'intake_root', str(intake))
+    launches = []
+    monkeypatch.setattr(jobs_api, 'launch', launches.append)
+    with TestClient(app) as client:
+        preview = client.get('/api/v1/jobs/preflight')
+        create = client.post('/api/v1/jobs', json={'directory_id': ''})
+    assert preview.status_code == 200
+    assert preview.json()['can_start'] is False
+    assert preview.json()['invalid_material_count'] == 1
+    assert preview.json()['skipped_symlink_count'] == 1
+    assert create.status_code == 400
+    assert '符号链接' in create.json()['detail']
+    assert launches == []
+
+
 def test_nested_7z_zip_uses_safe_disk_paths(tmp_path):
     zipped = io.BytesIO()
     with zipfile.ZipFile(zipped, 'w') as archive:
