@@ -61,7 +61,7 @@ npm test
 npm run build
 ```
 
-当前基线（提交 `c1fc4c4`）：后端 `662 passed、7 skipped、2 warnings`，Ruff 通过，前端 `80 passed`，生产构建通过但有大 chunk 警告。跳过项来自 Neo4j、LibreOffice 和 Windows 符号链接权限等环境条件；提交前以本次实际命令输出为准。
+历史记录：提交 `c1fc4c4`（2026-10-11）上曾记录后端 `662 passed、7 skipped、2 warnings`，Ruff 通过，前端 `80 passed`，生产构建通过并有大 chunk 警告。该数字仅属于当时代码和环境快照；每次提交应以本次命令输出为准，历史记录索引见 [archive/README](../archive/README.md)。
 
 ### Neo4j 集成测试
 
@@ -92,12 +92,12 @@ $env:BIDINTEL_TEST_NEO4J_PASSWORD = "本地 Compose 密码"
 | 前端提示无法连接 API | 检查后端端口、`VITE_API_BASE`、CORS 和局域网防火墙；运行 `scripts/Test-LanDemo.ps1` |
 | 模型返回超时/429/非法 JSON | 检查模型端点、超时、配额和 JSON 模式；后台任务会标记可重试，不要把失败结果当成空抽取 |
 | DOC 能打开但没有标的 | 检查 LibreOffice 转换和源表格；转换成功不等于字段解析成功 |
-| 附件显示 orphan 或 source unavailable | 先核查文件名归属和下载响应；87 个无效下载响应属于源数据问题，不能靠 prompt 恢复 |
+| 附件显示 orphan 或 source unavailable | 先核查文件名归属和下载响应；源站返回的无效下载属于输入材料问题，不能靠 prompt 恢复 |
 | Neo4j 查询回退 SQLite | 查看响应头 `X-Analytics-Backend`、容器日志和密码；回退是保护路径，需在报告中注明 |
 
 ## Git 工作流
 
-1. 从最新 `main` 创建短分支，先读 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) 第零节。
-2. 一个提交只解决一个可验收主题；代码改动同时更新测试、CHANGELOG 和受影响文档。
+1. 从最新 `main` 创建短分支，读 [`README.md`](../README.md) 和本次改动涉及的当前维护文档。
+2. 一个提交只解决一个可验收主题；代码改动同步更新测试和受影响文档。
 3. 提交前运行 `git diff --check`，确认没有 `.env`、密钥、`.data`、原始官方材料或构建缓存。
-4. PR 描述写清问题、行为变化、验证命令、测试范围和已知限制。
+4. PR 描述写清问题、行为变化、验证命令、测试范围和已知限制。历史状态快照见仓库根目录的 [`archive/`](../archive/README.md)，不作为当前待办清单。

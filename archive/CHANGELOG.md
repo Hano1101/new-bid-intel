@@ -1,11 +1,14 @@
-# 变更与决策记录
+# 变更与决策记录（历史归档）
+
+> **历史快照。** 本文于 2026-10-12 移出当前文档入口；其中的状态、优先级、行号、指标和验收记录仅描述当时范围，不代表当前任务或成绩。当前项目说明见 [README](../README.md) 和 [文档导航](../docs/DOCUMENTATION_INDEX.md)；本归档目录见 [索引](README.md)。
+
 
 > 每个条目中的测试数字、环境状态和路线结果都是该条目时点的历史快照；当前统一验收以顶部最新记录为准。保留历史数字不表示它们仍是当前基线，团队本地 Gold 和 mock 结果均不是官方成绩。
 
 ## 2026-10-11 · 文档整理与初赛报告
 
 - 新增评委快速入口、项目文档索引与交付材料索引，提供系统设计、技术路线和数据质量三份 Word/PDF，以及 PPT 大纲和两类视频脚本。
-- `docs/` 顶层 Markdown 从 48 份精简到 22 份；25 份阶段报告及配套补丁移入[历史归档](archive/README.md)，保留原验证范围。重复的 QA 评测说明合入 `EVALUATION.md`，统一维护两种指标口径。
+- `docs/` 顶层 Markdown 从 48 份精简到 22 份；25 份阶段报告及配套补丁移入[历史归档](../docs/archive/README.md)，保留原验证范围。重复的 QA 评测说明合入 `EVALUATION.md`，统一维护两种指标口径。
 - 同步修正文档与正式报告中的引用，补充当前服务器目录选择操作；本轮未修改生产代码。工程验证基线仍为 `c1fc4c4` 的已有记录，不把文档检查作为新的功能测试结果。
 - ONBOARDING 将 9 月 26 日完整任务、9 月 27 日修复后查询快照和 9 月 30 日附件快照拆开说明；明确早期速度估算不代表当前代码或赛事速度，并将早期三路线文件标为历史对照。
 
@@ -28,14 +31,14 @@
 
 - 新导入公告为采购单位元数据保存精确标签来源；表格标的保存表头与原单元格的字段证据。空单元格、原文明示“未公示”等标记和未知状态分别持久化；合并候选时状态随对应字段值迁移。页面可查看字段片段与来源 SHA-256。
 - 新导入对解析前的原始文件/压缩包成员字节计算 SHA-256，并验证已有 hash/size 与字节一致；解压、内容识别等后续转换不替代原始字节 hash。旧记录不会补造字段证据或 SHA-256；无字段证据的旧非空值是“待核验”，旧空值是“未知”。
-- 全量后端回归：**529 passed、3 skipped、2 warnings**；Ruff 通过。前端 **36 passed**，生产构建通过（保留既有大 chunk 提示）。定向解析/融合/证据测试 **116 passed**；未重导入官方原始语料。旧数据库抽查和无法取得原件的边界见[证据链验收报告](archive/reports/agent-evidence-chain-report.md)。
+- 全量后端回归：**529 passed、3 skipped、2 warnings**；Ruff 通过。前端 **36 passed**，生产构建通过（保留既有大 chunk 提示）。定向解析/融合/证据测试 **116 passed**；未重导入官方原始语料。旧数据库抽查和无法取得原件的边界见[证据链验收报告](../docs/archive/reports/agent-evidence-chain-report.md)。
 - GAP 第零节更新为只保留无法在没有原件时解决的历史追溯限制。
 
 ## 2026-10-10 · GAP 行动项状态收口
 
 - 将 cache-only 的 10/24 缺 parse cache 从待办关闭为“历史诊断覆盖受限”：14 条只读回放完成、10 条 fail-closed 隔离，未重解析、未写缓存、未发模型请求；不再为该诊断补缓存，也不宣称 24/24 回放。
 - 名称型包号的明确原文证据校验和拒绝污染护栏标为已完成；无可靠来源映射时仍保留 `default`，公告级对齐限制作为已接受风险保留，不标成完全解决。
-- 按用户决定移除“建立独立留出集”当前待办；现有 24 条 Gold 仅用于本地开发回归，报告不得宣称独立泛化或官方成绩。更新 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) 的当前清单和对应状态说明。
+- 按用户决定移除“建立独立留出集”当前待办；现有 24 条 Gold 仅用于本地开发回归，报告不得宣称独立泛化或官方成绩。更新 [`GAP_ANALYSIS.md`](GAP_ANALYSIS-2026-10-11.md) 的当前清单和对应状态说明。
 - 本次仅文档变更；`git diff --check` 通过，不涉及代码或测试变更。
 
 ## 2026-10-09 · 有界并发任务与三路线评测器整合
@@ -48,14 +51,14 @@
 
 - 在原件完整可读的情况下复现 PDF 页码标记阻断历史标题识别的问题。修复仅识别解析器现有 `[page:N]`、`[page:N/pdfplumber]`、`[page:N/ocr]` 标记并恢复扁平正文的页边界；不改 PDF 解析、候选证据或用途分类规则。
 - 原 PDF 9/9 条模型候选均有正文连续证据，过滤结果从 9 条保留变为 0 条保留；来源文件与解析 warning 仍保留。新增 20 项页标记测试；主工作区相关回归 **106 passed、2 warnings**，完整后端 **521 passed、3 skipped、2 warnings**，Ruff 通过。没有调用模型 API、改旧预测或重跑路线。
-- 这是本地调试样例，不是独立留出集或最终成绩；格式完全相同的字面页标记可能与真实页边界歧义，压平的页内结构仍无法恢复。详见 [PDF 验证报告](archive/reports/agent-gap120-pdf-validation-report.md)。
+- 这是本地调试样例，不是独立留出集或最终成绩；格式完全相同的字面页标记可能与真实页边界歧义，压平的页内结构仍无法恢复。详见 [PDF 验证报告](../docs/archive/reports/agent-gap120-pdf-validation-report.md)。
 
 ## 2026-10-10 · GAP 1.20/1.21 cache-only 回放与 Gold v2 离线重评分
 
 - 新增 fail-closed cache-only 回放器：缺 parse/model cache 立即隔离，禁止重解析、写回缓存或调用同步/异步模型 transport；故意 miss 测试和实际回放的 transport 请求均为 0。
 - 14/24 公告完成只读用途过滤与跨文件融合回放；10 条因缺 parse cache 隔离。hybrid 候选 `153→146`，model `149→139`；这些是完整缓存子集，不是 24 条全量新成绩。旧预测、Gold、旧报告和缓存 hash 未改变。
 - Gold v2 已对旧三路线预测完成 `local_proxy` 离线重评分：rules `55.13% / 12.30%`、hybrid `51.71% / 9.32%`、model `55.89% / 7.92%`（字段/完整记录加权分）。该结果只反映 Gold 版本变化，不是官方成绩，也不构成独立 holdout。
-- 合入提交 `d4fffb9` 后主工作区完整后端回归 **523 passed、3 skipped、2 warnings**，Ruff 通过。报告：[agent-gap-priority1-cache-only-replay-report.md](archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
+- 合入提交 `d4fffb9` 后主工作区完整后端回归 **523 passed、3 skipped、2 warnings**，Ruff 通过。报告：[agent-gap-priority1-cache-only-replay-report.md](../docs/archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
 
 ## 2026-10-09 · Gold 原文修订版
 
@@ -72,7 +75,7 @@
 - 只读缓存诊断：两份可定位历史附件候选分别 `5→0`、`9→0`；跨文件模型原始缓存 `332→309` 条、`59→59` 包。后者不是原最终预测的 317 条口径，也没有同时应用用途过滤；这些数字不是修复后的三路线成绩。
 - 新增只读评测诊断，区分完整预测精确率、固定 Gold 完整覆盖、最大完整记录配对和 TN 来源，不修改现有评分公式。既有三路线已于 10 月 9 日完成 24/24；model/hybrid 均完整匹配 `19/117`，不能把本地 QA 记录 recall 95% 当完整覆盖。该审计完成时回源发现 Gold 表头污染、不同服务重复同名和服务漏标，原 Gold/预测/报告均未改；随后来源核对修订版另记于本文件上条。
 - 当前工作树统一后端回归 **453 passed、3 skipped、2 warnings**；3 个跳过项为未配置真实 Neo4j 的集成测试；`ruff check app tests scripts` 通过。新增模块与接入边界共 **85 项**回归。没有调用付费 API、重跑模型或修改前端；本轮未 commit/push。
-- 设计、实际缓存口径和限制见 [附件用途报告](archive/reports/agent-attachment-scope-report.md)、[跨文件融合报告](archive/reports/agent-candidate-reconciliation-report.md)、[评测与 Gold 审计](archive/reports/agent-evaluation-semantics-audit.md)。本集已用于诊断修复，后续同集验证按开发回归记录；需要独立泛化结论时应另建未参与调优的留出集。
+- 设计、实际缓存口径和限制见 [附件用途报告](../docs/archive/reports/agent-attachment-scope-report.md)、[跨文件融合报告](../docs/archive/reports/agent-candidate-reconciliation-report.md)、[评测与 Gold 审计](../docs/archive/reports/agent-evaluation-semantics-audit.md)。本集已用于诊断修复，后续同集验证按开发回归记录；需要独立泛化结论时应另建未参与调优的留出集。
 
 ## 2026-10-08 · DeepSeek 官方 Chat Completions 思考参数兼容
 
@@ -93,7 +96,7 @@
 - 场景四继续取合作采购单位交集，项目数按每个供应商分别统计，增加 `project_count_scope=per_supplier_at_common_buyer`；不要求共同项目或同包中标。SQLite/Neo4j、前端与受控查询说明同步，金额按唯一 award 记录汇总，不采用 `SUM(DISTINCT amount)`，缺失值不补零。
 - 新增独立合成 oracle 和前端实际模板渲染测试。Docker Neo4j 5.26.14 下后端 **364 passed、0 skipped、2 warnings**（89.86 秒），Ruff 通过；前端 **33 passed**，构建通过，保留既有大 chunk 提示。
 - reviewed tuning Gold 24 条：SQLite/Neo4j 独立 oracle 各 **6471/6471**，返回对照 **6471/6471**，新报告位于 `.data/query-validation/gap-2.12-20261008-185019/tuning-neo4j.json`。保留旧报告，未读取/修改 holdout、Gold，未调用模型、重跑抽取、commit 或 push。
-- 依据原文术语表选择项目去重，场景四范围和跨公告项目识别仍需交付披露；不把本地验证写成官方评分确认。详见 [修复报告](archive/reports/agent-gap-2.12-report.md)。
+- 依据原文术语表选择项目去重，场景四范围和跨公告项目识别仍需交付披露；不把本地验证写成官方评分确认。详见 [修复报告](../docs/archive/reports/agent-gap-2.12-report.md)。
 
 ## 2026-10-08 · 任务二查询口径与 QA 评测迁移
 
@@ -112,7 +115,7 @@
 - 完整附件明细台账在本地原位保留，因包含全部来源成员路径及原始 warning、尚未完成公开审查而排除；提交的 `attachment-audit-summary.json` 只保留历史聚合计数与台账哈希，不宣称为修复后脚本的重新验收结果。
 - 受控查询默认调用已配置的 Qwen/DeepSeek 端点解析结构化意图；模型不可用时保留手动回退，所有执行仍经过五场景白名单和 Pydantic 校验，不接受 SQL/Cypher。
 - 验证：后端 **339 passed、1 skipped**（2 条 warning），Ruff 通过；前端 **26 passed**，Vite 生产构建通过并保留大 chunk 警告。
-- 统一审查补齐供应商筛选、共享查询来源交集、澄清不执行、品牌名前缀保护、前端会话和数据集切换回归；附件审计修正成员哈希与 HTML 引用，资源验证使用隔离库并实际检查公告详情。详细命令、排除项与限制见 [统一审查记录](archive/reports/CONSOLIDATION_REVIEW_2026-10-07.md)。
+- 统一审查补齐供应商筛选、共享查询来源交集、澄清不执行、品牌名前缀保护、前端会话和数据集切换回归；附件审计修正成员哈希与 HTML 引用，资源验证使用隔离库并实际检查公告详情。详细命令、排除项与限制见 [统一审查记录](../docs/archive/reports/CONSOLIDATION_REVIEW_2026-10-07.md)。
 - 当前 holdout 后台目录仍为 `rules 24/24`、`hybrid 23/24`、`model 22/24`，状态 `incomplete`；由于验收后抽取/评测代码哈希已变化，必须用当前冻结代码重新续跑/复跑，不能把旧目录作为 final 结果。
 
 ## 2026-10-07 · 证据弹窗金额显示回归修复
@@ -148,7 +151,7 @@
 
 ## 2026-10-01 · 项目文档入口与发布检查清单
 
-- 新增 [`ARCHITECTURE.md`](ARCHITECTURE.md)、[`DEVELOPMENT.md`](DEVELOPMENT.md)、[`MODEL_AND_EXTRACTION.md`](MODEL_AND_EXTRACTION.md)、[`DATA_QUALITY.md`](DATA_QUALITY.md) 和 [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)，分别固定数据流、开发环境、模型证据链、官方附件质量边界和比赛提交前检查。
+- 新增 [`ARCHITECTURE.md`](../docs/ARCHITECTURE.md)、[`DEVELOPMENT.md`](../docs/DEVELOPMENT.md)、[`MODEL_AND_EXTRACTION.md`](../docs/MODEL_AND_EXTRACTION.md)、[`DATA_QUALITY.md`](../docs/DATA_QUALITY.md) 和 [`RELEASE_CHECKLIST.md`](../docs/RELEASE_CHECKLIST.md)，分别固定数据流、开发环境、模型证据链、官方附件质量边界和比赛提交前检查。
 - 根目录新增 [`CONTRIBUTING.md`](../CONTRIBUTING.md) 与 [`SECURITY.md`](../SECURITY.md)，README 改为 GitHub 首页式入口，并明确当前未声明开源许可证。
 - 更新 ONBOARDING、DATA_INTAKE、EVALUATION、QUERY_SEMANTICS 和 GAP_ANALYSIS 的当前状态，统一后端 `296 passed, 1 skipped`（2 条 warning）、前端 `15 passed`，区分 24 条 tuning Gold、独立 holdout Gold 和官方原始数据。
 - 本次只修改文档，没有重跑模型、全量数据或生产代码；PPT、视频和正式比赛报告仍待 holdout 评测后制作。
@@ -170,11 +173,11 @@
 - 完成 1038 条公告附件快照统计：13,136 个附件叶文件中，12,124 个成功或部分解析，986 个按参考材料角色保留但不解析，19 个程序解析失败（17 个 PDF、2 个 DOC），7 个不支持文件（6 个 DWG、1 个 GBQ7）。两份 WPS 按旧 Word 转换路径读取并保留来源。
 - 坏 RAR、超限或深层归档及单成员读取异常按成员隔离；单个坏附件不会阻断公告或全量批处理。87 个无效下载响应保持原始内容，不补造附件。
 - 对 17 个 PDF 流异常做只读回放：9 个由 pdfplumber 备用解析并进入 OCR，8 个仍无法由 pypdf、pdfplumber 和 Poppler 读取。解析器异常只有在独立源完整性证据支持时才归为源文件损坏，否则归为程序解析失败。
-- 新增 warning 分类测试、格式识别和失败隔离回归；后端 `266 passed, 1 skipped`，Ruff 与 `git diff --check` 通过。统计结果见 [`benchmarks/official-attachments-20260930.json`](benchmarks/official-attachments-20260930.json)。
+- 新增 warning 分类测试、格式识别和失败隔离回归；后端 `266 passed, 1 skipped`，Ruff 与 `git diff --check` 通过。统计结果见 [`benchmarks/official-attachments-20260930.json`](../docs/benchmarks/official-attachments-20260930.json)。
 
 > 按日期倒序。这里记的是**经过**、**边界**和**当时的数字**。
-> 可复用的结论（怎么跑、红线、哪些坑不要再踩）在 [`ONBOARDING.md`](ONBOARDING.md)，本文不重复。
-> 开放问题在 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md)。
+> 可复用的结论（怎么跑、红线、哪些坑不要再踩）在 [`ONBOARDING.md`](../docs/ONBOARDING.md)，本文不重复。
+> 开放问题在 [`GAP_ANALYSIS.md`](GAP_ANALYSIS-2026-10-11.md)。
 
 ## 2026-09-29 · Neo4j 路径可用性修复
 
@@ -200,7 +203,7 @@
 
 ## 2026-09-28 · 任务一：6 条 Gold 附件 pilot
 
-同一批 6 条 reviewed Gold 的 HTML+附件/OCR 回放已完成 `rules / hybrid / model` 三路线。字段本地代理 Weighted 为 **92.1179% / 70.8524% / 77.9191%**，完整记录为 **74.9145% / 47.2286% / 49.1913%**；模型路线新增大量 FP，没有证明优于 rules。实际请求为 hybrid 44 次、model 45 次（含 1 次断线重试），累计 132,380 prompt 与 80,317 completion tokens。阶段只覆盖 6/24，不能代表余下 18 条或官方评分。详见 [`附件 pilot 报告`](benchmarks/route-evaluation-attachments-pilot-20260928.md)。
+同一批 6 条 reviewed Gold 的 HTML+附件/OCR 回放已完成 `rules / hybrid / model` 三路线。字段本地代理 Weighted 为 **92.1179% / 70.8524% / 77.9191%**，完整记录为 **74.9145% / 47.2286% / 49.1913%**；模型路线新增大量 FP，没有证明优于 rules。实际请求为 hybrid 44 次、model 45 次（含 1 次断线重试），累计 132,380 prompt 与 80,317 completion tokens。阶段只覆盖 6/24，不能代表余下 18 条或官方评分。详见 [`附件 pilot 报告`](../docs/benchmarks/route-evaluation-attachments-pilot-20260928.md)。
 
 ---
 
@@ -208,7 +211,7 @@
 
 完成同一批 24 条 reviewed Gold 的 `rules / hybrid / model` 可续跑比较。三路线均覆盖 24/24 个相同 notice ID；Gold SHA-256 为 `cfa3fa242bf6f1eec0bd474731e1d48a126df9259e9148c837c8f8458bb5759f`。本地代理字段 Weighted 为 `89.5457% / 83.6201% / 90.8097%`，完整记录 Weighted 为 `74.3357% / 66.6153% / 73.8601%`（rules / hybrid / model）。model 的字段分只比 rules 高 1.2640 个百分点，完整记录反而低 0.4756 个百分点；hybrid 两项均低于 rules，因此不能宣称模型路线全面优于规则路线。
 
-评测驱动支持按公告检查点续跑、Gold/source/code hash 身份校验和按路线统计请求/耗时/token；输出和限制见 [`route-evaluation-html-20260928.md`](benchmarks/route-evaluation-html-20260928.md)。本轮只评 HTML，不代表附件/OCR 回放，也不是官方竞赛成绩。
+评测驱动支持按公告检查点续跑、Gold/source/code hash 身份校验和按路线统计请求/耗时/token；输出和限制见 [`route-evaluation-html-20260928.md`](../docs/benchmarks/route-evaluation-html-20260928.md)。本轮只评 HTML，不代表附件/OCR 回放，也不是官方竞赛成绩。
 
 ---
 
@@ -218,7 +221,7 @@
 
 五场景分别返回 **15 家合作供应商；5 家投标方和 5 对组合；5 家共同竞标者及 25 个中标包；4 个共同采购单位；29 个共同投标包、22 个项目**。首调 **9.3–89.5 ms**，每类重复 30 次，warm p50 **8.9–89.0 ms**、p95 **10.2–92.9 ms**，重复结果一致。实际本机 HTTP 五接口均 **200**，单次 **11.2–122.5 ms**，结果数组与基准一致；场景三缺少 `include_winners` 回显字段，已在 JSON 保留两份完整响应。
 
-新增 [`check_analytics_display.py`](../scripts/check_analytics_display.py)，只读打开原库并备份到临时库测量，核对源文件 SHA-256 前后相同；无模型调用。完整响应、耗时样本和复现步骤见 [`实测报告`](benchmarks/official-full-20260927-analytics.md)及同名 JSON。脚本 Ruff 检查通过。
+新增 [`check_analytics_display.py`](../scripts/check_analytics_display.py)，只读打开原库并备份到临时库测量，核对源文件 SHA-256 前后相同；无模型调用。完整响应、耗时样本和复现步骤见 [`实测报告`](../docs/benchmarks/official-full-20260927-analytics.md)及同名 JSON。脚本 Ruff 检查通过。
 
 **边界**：测量固定在 `68642fc` 独立 checkout，避免混入同时进行的 6a 修改；实际服务没有重启，未确认其提交版本。该基准场景 2/3 仍含 `unknown`，频次按包；不代表 6a 修改后的行为。这里仅确认所选主体能返回可展示结果，不证明答案正确、不代表全部主体覆盖率，也未验收浏览器渲染或第二台设备。
 
@@ -230,7 +233,7 @@
 
 场景二/三改为明确筛 `nonwinner`，频次改按项目去重；`include_winners=true` 保留完整状态查询。SQLite、Neo4j 查询模板和前端计数标签同步使用项目粒度。标注实体 ID 是提及级，oracle 按存储层的空白/大小写精确归一名对齐，不做模糊合并。
 
-验证：后端全量 **215 passed、1 skipped**；Ruff 检查通过；前端 **13 passed**、生产构建通过（仍有既有大 chunk 提示）；24 条 Gold 独立查询比较 **6471 passed、0 failed**。本轮只实测 SQLite，未连接 Neo4j；它验证已有关系与输出字段，不代表场景 3/5 缺失的金额汇总（GAP 2.5/2.6）已完成。完整范围、命令和局限见 [`GAP 6a 查询验证`](benchmarks/gap-6a-gold-query-validation.md)。
+验证：后端全量 **215 passed、1 skipped**；Ruff 检查通过；前端 **13 passed**、生产构建通过（仍有既有大 chunk 提示）；24 条 Gold 独立查询比较 **6471 passed、0 failed**。本轮只实测 SQLite，未连接 Neo4j；它验证已有关系与输出字段，不代表场景 3/5 缺失的金额汇总（GAP 2.5/2.6）已完成。完整范围、命令和局限见 [`GAP 6a 查询验证`](../docs/benchmarks/gap-6a-gold-query-validation.md)。
 
 ---
 
@@ -301,7 +304,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 | `annotator-a.ready.zip` | LHH：完成分给自己的公告 | 9 |
 | `annotator-b.ready.zip` | YHR：完成分给自己的公告 | 9 |
 
-**文档**：原 `ANNOTATION_GUIDE.md` 73 行里大半是协调员的 PowerShell，标注员自己的步骤在六节中的第三节。新增 [`ANNOTATION_ANNOTATOR.md`](ANNOTATION_ANNOTATOR.md)（面向标注员，无命令，按钮名照抄界面）；原指南标题标注「（协调员用）」；重写 `ANNOTATION_QUICKSTART.txt`——它被 `annotation_tasks_cli.py` 读入并作为 `START_HERE.txt` 写进每个分发包，新操作卡（1423 字符）已在本次重新生成的两个 ZIP 中验证存在。
+**文档**：原 `ANNOTATION_GUIDE.md` 73 行里大半是协调员的 PowerShell，标注员自己的步骤在六节中的第三节。新增 [`ANNOTATION_ANNOTATOR.md`](../docs/ANNOTATION_ANNOTATOR.md)（面向标注员，无命令，按钮名照抄界面）；原指南标题标注「（协调员用）」；重写 `ANNOTATION_QUICKSTART.txt`——它被 `annotation_tasks_cli.py` 读入并作为 `START_HERE.txt` 写进每个分发包，新操作卡（1423 字符）已在本次重新生成的两个 ZIP 中验证存在。
 
 **验证**：`tests/test_annotation_tasks_cli.py` **4 passed**（新增 1 项：姓名进入四种 bundle；省略姓名时保留原措辞）。Ruff 通过。
 
@@ -334,7 +337,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 - 依据逐条检查点时间估算，首轮约 65 分 16 秒，恢复约 1 分 29 秒，活跃处理墙钟合计约 66 分 45 秒。该值是 3 进程本机规则/OCR 工程基线，不是赛事分数或模型耗时。
 - 验证（当时的全量处理提交前检查）：后端 **149 passed、1 skipped**，Ruff 通过；前端 **4 passed**，生产构建通过（仍有既有 ECharts 大 chunk 提示）。当前测试基线见标注工作流记录。
 
-机器摘要：[official-full-20260926.json](benchmarks/official-full-20260926.json)。本次结果没有人工 gold，不生成准确率指标。旧的 `official-intake-20260925.json` 与 `official-fixes-20260925.json` 保持原样，分别作为首轮盘点和 6 条回归历史记录。
+机器摘要：[official-full-20260926.json](../docs/benchmarks/official-full-20260926.json)。本次结果没有人工 gold，不生成准确率指标。旧的 `official-intake-20260925.json` 与 `official-fixes-20260925.json` 保持原样，分别作为首轮盘点和 6 条回归历史记录。
 
 ---
 
@@ -351,7 +354,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 - 57 文件公告首次修复后处理 243.179 秒（首次转换 9 个原失败 DOC），最终缓存复跑 1.631 秒；不是全量性能指标。两个阶段输出均保留。
 - 后端 **139 passed, 1 skipped**（外部 Neo4j），**Ruff 通过**。新增 25 项回归；真实 DOC 用例增加伪扩展和缓存复用验证。前端未改，未重复其构建。
 
-最终 6 条/4 候选写入独立“官方数据修复后回归（规则基线·待核验）”数据集，ID dd7e07c2b27f4897b67a934beef4fc39；默认库文件 SHA-256 不变，旧试跑结果保留。没有真实模型调用，没有改动原件，没有 gold 或准确率结论。机器记录见 [official-fixes-20260925.json](benchmarks/official-fixes-20260925.json)，操作边界见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
+最终 6 条/4 候选写入独立“官方数据修复后回归（规则基线·待核验）”数据集，ID dd7e07c2b27f4897b67a934beef4fc39；默认库文件 SHA-256 不变，旧试跑结果保留。没有真实模型调用，没有改动原件，没有 gold 或准确率结论。机器记录见 [official-fixes-20260925.json](../docs/benchmarks/official-fixes-20260925.json)，操作边界见 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
 
 截至 2026-09-25，RAR/7z、专有格式、大包、真实 OCR、进度/续跑及全量导入仍未完成；DOC 缓存暂无自动容量淘汰；XLS 参考工作表仍会占上下文；材料角色与品牌别名尚未在全量人工核验。次日全量批处理进展见上文。源数据缺失仍须由数据方处理，不能用模型补造。
 
@@ -367,13 +370,13 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 - 1038 条 HTML 规则解析耗时 41.11 秒，398 条有候选、640 条无候选，共 3814 个候选；这是正文产出统计，未经金标验证，不含附件和入库时间。
 - 6 条正文＋附件试跑共 9 个候选，已存入独立“官方数据首批兼容性检查（规则基线·非完整结果）”数据集。发现 12 份文档解析失败、2 个无扩展名附件被跳过，真实 DOC 超时和跨文件重复问题均已复现。
 
-新增 GAP 1.16/1.17/4.14，4.3 标为首轮盘点完成、全量待接入。全部处理为 rules、模型调用 0；本轮没有改应用代码，也没有重新宣称准确率或全量吞吐。源文件完整异常清单仅保存在本地 .data，仓库新增聚合统计与 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md)。未重新运行不受影响的应用测试；此前实现基线仍为 114 passed、1 skipped、Ruff 通过、前端 4 passed。
+新增 GAP 1.16/1.17/4.14，4.3 标为首轮盘点完成、全量待接入。全部处理为 rules、模型调用 0；本轮没有改应用代码，也没有重新宣称准确率或全量吞吐。源文件完整异常清单仅保存在本地 .data，仓库新增聚合统计与 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md)。未重新运行不受影响的应用测试；此前实现基线仍为 114 passed、1 skipped、Ruff 通过、前端 4 passed。
 
 ---
 
 ## 2026-09-25 · 数据到达前的三项接入准备
 
-完成 P1-7、GAP 4.11、P1-6 的本地实现与回归。操作说明见 [DATA_INTAKE.md](DATA_INTAKE.md)。
+完成 P1-7、GAP 4.11、P1-6 的本地实现与回归。操作说明见 [DATA_INTAKE.md](../docs/DATA_INTAKE.md)。
 
 实现提交：[1895a26](https://github.com/rua103/bid-intel/commit/1895a260c543dd8b7b468fe090da8a8e4ec6235d)。缺口状态、接入说明、测试数字与验收边界随实现提交；实际提交号在后续文档提交补记。
 
@@ -455,7 +458,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 
 ### 本地真实公告与旧模型回放
 
-机器记录见 [`benchmarks/p0-verification.json`](benchmarks/p0-verification.json)。该文件只含公开公告文件名、SHA-256、核对布尔值和计数，没有本地密钥或不可移植的数据路径。原始公告在本地开发集内，未提交 Git。
+机器记录见 [`benchmarks/p0-verification.json`](../docs/benchmarks/p0-verification.json)。该文件只含公开公告文件名、SHA-256、核对布尔值和计数，没有本地密钥或不可移植的数据路径。原始公告在本地开发集内，未提交 Git。
 
 - 20 条公告的项目名称：**20/20** 与头部单元格一致。
 - 采购单位：**20/20** 一致。
@@ -488,7 +491,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 
 ## 2026-09-24 · 缺口审查：59 条代码级发现 + 13 条提交物缺口
 
-对全仓做了一次五方向并行审查（抽取链路 / 任务二三 / 前端 / 文档 / 工程质量），产出 [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md)。
+对全仓做了一次五方向并行审查（抽取链路 / 任务二三 / 前端 / 文档 / 工程质量），产出 [`GAP_ANALYSIS.md`](GAP_ANALYSIS-2026-10-11.md)。
 
 其中 **5 条 blocker 经人工在真实代码与数据上复核**（1.1 / 1.2 / 1.3 / 3.1 / 3.2），其余 54 条标记为"审查产出，未独立验证"。
 
@@ -525,7 +528,7 @@ hybrid 共发起 **6 次模型请求、6 次成功**，6 条均生成预测。Go
 | 单条耗时 | 210 / 216 / 200s | 24.5 / 35.9 / 88.7s |
 | 抽取成功的公告数 | **0 / 3** | **3 / 3** |
 
-两份原始结果都在 [`benchmarks/`](benchmarks/)：`stream-compare-3-reasoning-on.json`（即上表"修复前"）与 `stream-compare-3.json`。
+两份原始结果都在 [`benchmarks/`](../docs/benchmarks)：`stream-compare-3-reasoning-on.json`（即上表"修复前"）与 `stream-compare-3.json`。
 
 **计费**：排障期间用 `model_call_budget` 限制了请求次数，但超时请求是否计费取决于服务商，需由团队查看服务商 usage/billing。修复后的 6 次请求都有本地 token usage 可核验。
 

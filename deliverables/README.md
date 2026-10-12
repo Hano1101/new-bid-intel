@@ -14,7 +14,7 @@
 
 ## 展示与打包材料
 
-- [评委快速了解](../docs/JUDGE_QUICKSTART.md)：作品亮点、入口和演示顺序。
+- [评委演示与操作指南](../docs/REVIEWER_GUIDE.md)：作品介绍、离线启动、登录和演示顺序。
 - [PPT 内容大纲](presentation-outline.md)：核心内容预览、业务场景、技术创新与工程成果。
 - [汇报视频讲解稿](pitch-video-script.md)：配合 PPT 讲解，不超过 10 分钟。
 - [系统演示脚本](demo-video-script.md)：完整操作路径，不超过 5 分钟。

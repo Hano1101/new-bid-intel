@@ -89,4 +89,4 @@
 
 ## 7 配套资料
 
-docs/ARCHITECTURE.md 保存架构与数据流；docs/QUERY_SEMANTICS.md 保存业务统计口径；docs/CHANGELOG.md 和 docs/archive/reports/agent-notice-versioning-report.md 保存验收记录；deliverables/source-data-index.md 说明源码、任务一结果表和任务二数据模型的交付结构。
+docs/ARCHITECTURE.md 保存架构与数据流；docs/QUERY_SEMANTICS.md 保存业务统计口径；archive/CHANGELOG.md 和 docs/archive/reports/agent-notice-versioning-report.md 保存验收记录；deliverables/source-data-index.md 说明源码、任务一结果表和任务二数据模型的交付结构。

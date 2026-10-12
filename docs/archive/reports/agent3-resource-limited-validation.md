@@ -39,7 +39,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
 powershell -ExecutionPolicy Bypass -File .\scripts\Stop-Demo.ps1
 ```
 
-宿主机脚本会记录进程、健康检查和日志路径；不能替代第二台设备或 Ubuntu 24.04 验收。宿主前端 Node 测试和生产构建已在统一验收中重跑，结果见 [`CHANGELOG.md`](../../CHANGELOG.md) 顶部。
+宿主机脚本会记录进程、健康检查和日志路径；不能替代第二台设备或 Ubuntu 24.04 验收。宿主前端 Node 测试和生产构建已在统一验收中重跑，历史结果见[变更记录归档](../../../archive/CHANGELOG.md)。
 
 ## 风险与边界
 

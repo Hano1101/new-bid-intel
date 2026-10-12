@@ -1,6 +1,17 @@
-# 评委操作指南
+# 评委演示与操作指南
 
-本指南按实际演示顺序介绍登录、导入、分析、证据追溯和人工复核。首次了解作品可先阅读 [`JUDGE_QUICKSTART.md`](JUDGE_QUICKSTART.md)；安装和开发命令见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
+本指南合并了作品快速介绍、离线启动和实际演示步骤，适用于评委与演示负责人。系统从采购公告和附件抽取带来源的候选记录，提供五类关系分析、图谱搜索、关系线索、人工复核和公告版本比较。关系线索用于定位材料，不自动认定违规行为。安装、运行时依赖和测试命令见 [`DEVELOPMENT.md`](DEVELOPMENT.md)。
+
+## 快速离线演示
+
+首次使用先安装项目依赖。随后在仓库根目录配置本机评审账号并启动离线样例：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Configure-ReviewerAccount.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
+```
+
+离线模式会准备纯虚构样例并使用规则抽取，不需要模型 API Key。它演示操作流程，不代表真实材料处理结果或比赛评分。启动脚本显示分析台和标注页地址；演示结束运行 [停止脚本](../scripts/Stop-Demo.ps1)。局域网部署与第二设备检查见 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md)。
 
 ## 由演示负责人准备账号
 
@@ -26,12 +37,6 @@ AUTH_COOKIE_SECURE=false
 配置后重启后端。HTTP 演示使用 `AUTH_COOKIE_SECURE=false`，HTTPS 部署使用 `true`。会话 Cookie 为 HttpOnly、SameSite=Strict，默认 8 小时过期。
 
 ## 启动和登录
-
-完成依赖安装后，在仓库根目录运行：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
-```
 
 打开启动脚本显示的分析台地址。本机默认使用 `http://localhost:5173`，局域网访问使用脚本显示的主机 IPv4 地址。输入评审账号，在数据集选择器中选择“离线演示样例（纯虚构）”。该模式会准备虚构样例并采用规则抽取，不调用在线模型。
 

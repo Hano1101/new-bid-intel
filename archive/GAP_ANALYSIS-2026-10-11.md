@@ -1,4 +1,7 @@
-# 缺口分析（2026-10-11）
+# 全仓缺口审查（2026-10-11 历史快照）
+
+> **历史快照。** 本文于 2026-10-12 移出当前文档入口；其中的状态、优先级、行号、指标和验收记录仅描述当时范围，不代表当前任务或成绩。当前项目说明见 [README](../README.md) 和 [文档导航](../docs/DOCUMENTATION_INDEX.md)；本归档目录见 [索引](README.md)。
+
 
 > 本文是一次全仓并行审查的结果汇总，覆盖抽取链路、任务二/三、前端、文档、工程质量五个方向，共 59 条代码级发现 + 13 条提交物层面的完整性检查。
 >
@@ -17,9 +20,9 @@
 >
 > 1. 状态改成 `已修（<提交号前 7 位>）`；判断不成立的条目改成 `不成立（原因）`，**不要删行**
 > 2. 到 [`CHANGELOG.md`](CHANGELOG.md) 记一条：改了什么 + **验收边界** + **实测数字**（没有数字的"已修"不算数）
-> 3. 测试数量／跑法／红线有变 → 同步 [`ONBOARDING.md`](ONBOARDING.md)
+> 3. 测试数量／跑法／红线有变 → 同步 [`ONBOARDING.md`](../docs/ONBOARDING.md)
 >
-> 完整约定与先例见 [`ONBOARDING.md`](ONBOARDING.md) 第十一节。
+> 完整约定与先例见 [`ONBOARDING.md`](../docs/ONBOARDING.md) 第十一节。
 >
 > **2026-10-11 更新**：先看第零节的当前交付状态；完全完成事项仍保留在附录，历史问题条目用于追溯。
 > 下文各小节的**问题描述、旧代码行号和旧实验数字保留为修复前证据**，不代表当前状态。
@@ -42,11 +45,11 @@
 
 **已关闭任务与接受的限制**：cache-only 回放器按 fail-closed 规则完成验证；历史缓存快照覆盖 14/24 条，余下记录因缺少 parse cache 被隔离，没有重解析、改写缓存或发出模型请求。这是一次覆盖受限的历史诊断，不是完整 24 条回放。名称型包号只在原文明确标签和值且通过语义校验时接受；没有可靠映射时保留 `default`。这项证据边界已有保护与说明，不列作当前代码整改任务。
 
-**2026-10-10 Gold v2 与 cache-only 历史诊断**：三条旧路线预测已用 Gold v2 完成 `local_proxy` 离线重评分；rules 字段/完整记录加权分为 `55.13% / 12.30%`，hybrid 为 `51.71% / 9.32%`，model 为 `55.89% / 7.92%`。这些数字属于已参与调试的本地回归材料，只说明对应样本、预测和指标版本的结果。cache-only 回放覆盖 14/24 条，hybrid `153→146`、model `149→139`，模型请求和同步/异步 transport 均为 0；10 条因缺 parse cache 被隔离。详情见 [历史回放记录](archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
+**2026-10-10 Gold v2 与 cache-only 历史诊断**：三条旧路线预测已用 Gold v2 完成 `local_proxy` 离线重评分；rules 字段/完整记录加权分为 `55.13% / 12.30%`，hybrid 为 `51.71% / 9.32%`，model 为 `55.89% / 7.92%`。这些数字属于已参与调试的本地回归材料，只说明对应样本、预测和指标版本的结果。cache-only 回放覆盖 14/24 条，hybrid `153→146`、model `149→139`，模型请求和同步/异步 transport 均为 0；10 条因缺 parse cache 被隔离。详情见 [历史回放记录](../docs/archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
 
-**2026-10-09 统一验收**：附件用途、跨文件候选融合、只读评测诊断及有界并发任务/评测器已随 commit `5370c61` 推送；该基线后端全量 **501 passed、3 skipped、2 warnings**，Ruff 通过，真实 Neo4j 本轮未配置。前端 **33 passed**，生产构建通过并有既有大 chunk 提示。PDF 页码用途修复合入后，后端全量现为 **521 passed、3 skipped、2 warnings**，Ruff 通过；原预测、缓存和报告均保留，付费 API 请求为 0。两份历史附件缓存分别 `5→0`、`9→0`；另一次模型原始缓存融合 `332→309`、包数 `59→59`，不同诊断不能叠加为生产收益。详见 [用途报告](archive/reports/agent-attachment-scope-report.md)、[PDF 验证报告](archive/reports/agent-gap120-pdf-validation-report.md)、[融合报告](archive/reports/agent-candidate-reconciliation-report.md)、[评测审计](archive/reports/agent-evaluation-semantics-audit.md)、[有界任务说明](bounded-jobs.md)及[有界评测说明](bounded-route-evaluation.md)。
+**2026-10-09 统一验收**：附件用途、跨文件候选融合、只读评测诊断及有界并发任务/评测器已随 commit `5370c61` 推送；该基线后端全量 **501 passed、3 skipped、2 warnings**，Ruff 通过，真实 Neo4j 本轮未配置。前端 **33 passed**，生产构建通过并有既有大 chunk 提示。PDF 页码用途修复合入后，后端全量现为 **521 passed、3 skipped、2 warnings**，Ruff 通过；原预测、缓存和报告均保留，付费 API 请求为 0。两份历史附件缓存分别 `5→0`、`9→0`；另一次模型原始缓存融合 `332→309`、包数 `59→59`，不同诊断不能叠加为生产收益。详见 [用途报告](../docs/archive/reports/agent-attachment-scope-report.md)、[PDF 验证报告](../docs/archive/reports/agent-gap120-pdf-validation-report.md)、[融合报告](../docs/archive/reports/agent-candidate-reconciliation-report.md)、[评测审计](../docs/archive/reports/agent-evaluation-semantics-audit.md)、[有界任务说明](../docs/bounded-jobs.md)及[有界评测说明](../docs/bounded-route-evaluation.md)。
 
-**2026-10-09 GAP 1.20 PDF 原件验证**：原件完整可解析，历史表用途标题被 `[page:N]` 页标记挡住的缺陷已在主工作区复现并修复。原 PDF 中 9/9 个模型候选证据均可定位；用途过滤将其从 9 条排除至 0 条，保留来源和 warning。新增 PDF 页标记回归；本轮定向相关测试 **106 passed、2 warnings**，Ruff 通过。该样例已用于调试，仅为本地回归，不是独立 holdout 或三路线成绩；未调用模型 API。具体证据与限制见[PDF 验证报告](archive/reports/agent-gap120-pdf-validation-report.md)。
+**2026-10-09 GAP 1.20 PDF 原件验证**：原件完整可解析，历史表用途标题被 `[page:N]` 页标记挡住的缺陷已在主工作区复现并修复。原 PDF 中 9/9 个模型候选证据均可定位；用途过滤将其从 9 条排除至 0 条，保留来源和 warning。新增 PDF 页标记回归；本轮定向相关测试 **106 passed、2 warnings**，Ruff 通过。该样例已用于调试，仅为本地回归，不是独立 holdout 或三路线成绩；未调用模型 API。具体证据与限制见[PDF 验证报告](../docs/archive/reports/agent-gap120-pdf-validation-report.md)。
 
 **2026-10-08 答疑迁移统一验收已通过**：`official_qa` 四格指标和任务二参与方默认口径已实现；场景一新增按 `brand` 聚合的产品供应商项目/包频次、明确标的总价与来源证据，不映射法律实体、不复制中标交易额。新 SQLite oracle `qa-semantics-20261007-v2.json` 为 **6471/6471**，未运行 Neo4j；历史双后端同数量结果仍保留为旧口径证据。完整回归和新口径 Neo4j 验收以本轮实际运行记录为准。
 
@@ -200,7 +203,7 @@ hybrid   6 items: [前三项, 同样的三项再来一遍]
 
 对照组：[`evaluation_cli.py:35-36`](../backend/app/evaluation_cli.py) 有 `if len(inputs) != 2: raise ValueError("gold and predictions must be separate files")`，Web 路径没有同类保护。全后端唯一能产出 `status: predicted` 文件的地方就是 `evaluation_api.py:68`——**predictions 天然等于 gold**。
 
-**影响**：直接威胁任务一"提取准确性"15 分的叙事与答辩诚信。评委问一句"你的 gold 和 predictions 是同一份文件吗"就当场穿帮。而 [`ONBOARDING.md`](ONBOARDING.md) 第五节红线第 5 条本就写着"不要把自动抽取结果当金标"，工具却把错误路径做成了最短路径。
+**影响**：直接威胁任务一"提取准确性"15 分的叙事与答辩诚信。评委问一句"你的 gold 和 predictions 是同一份文件吗"就当场穿帮。而 [`ONBOARDING.md`](../docs/ONBOARDING.md) 第五节红线第 5 条本就写着"不要把自动抽取结果当金标"，工具却把错误路径做成了最短路径。
 
 ### 1.4 表头别名缺 CCGP 标准列名 · 已修 · 小时
 
@@ -268,7 +271,7 @@ hybrid   6 items: [前三项, 同样的三项再来一遍]
 
 ### 1.8 附件覆盖两处硬缺口 · high · 天
 
-**2026-09-25 当前状态**：P1-7 已补旧 XLS、DOC 转换，并将 PDF 表格/渲染依赖升为基础依赖；增加能力检查和失败提示。15 项附件测试覆盖真实格式与边界（其中扫描页仅验证渲染及模拟 OCR 接口）。DOC 存在生成器兼容差异，未声称所有附件可提取；详情见 [接入说明](DATA_INTAKE.md)。以下为修复前证据。
+**2026-09-25 当前状态**：P1-7 已补旧 XLS、DOC 转换，并将 PDF 表格/渲染依赖升为基础依赖；增加能力检查和失败提示。15 项附件测试覆盖真实格式与边界（其中扫描页仅验证渲染及模拟 OCR 接口）。DOC 存在生成器兼容差异，未声称所有附件可提取；详情见 [接入说明](../docs/DATA_INTAKE.md)。以下为修复前证据。
 
 **证据**：[`corpus.py:21`](../backend/app/corpus.py) 的 `ATTACHMENT_SUFFIXES` 含 `.doc`/`.xls`，但 [`parsers.py:304-334`](../backend/app/parsers.py) 只分派 html/docx/xlsx/pdf/txt/图片，其余返回「暂不支持附件格式」。赛题原文任务一第 2 条写明附件「内含 doc/docx/xlsx/pdf 等」。另：[`parsers.py:266-267`](../backend/app/parsers.py) 在 `pdfplumber`/`pypdfium2` 缺失时只发一条 warning 就降级为纯文本，PDF 表格 **0 抽取**（这两个包在 `pyproject.toml` 里是可选 extra `ocr`，未安装）。实测唯一真实附件（19MB PDF）：1.17 秒抽出 15506 字、`items=0`。
 
@@ -312,7 +315,7 @@ hybrid   6 items: [前三项, 同样的三项再来一遍]
 
 ### 1.15 合成基准的 100% 抽取率不能代表官方数据 · low · 小时
 
-**证据**：[`benchmark.py:35`](../backend/app/benchmark.py) 生成的表头固定为 `采购标的/品目/品牌/规格型号/数量/单价/总价`——**恰好是被 `FIELD_ALIASES` 完美覆盖的那一种形状**（命中 7/7）。因此 [`synthetic-1000.md`](benchmarks/synthetic-1000.md) 写"实际标的数 2000；预期 2000"。同一套代码在真实 20 篇上只有 4 篇出标的。
+**证据**：[`benchmark.py:35`](../backend/app/benchmark.py) 生成的表头固定为 `采购标的/品目/品牌/规格型号/数量/单价/总价`——**恰好是被 `FIELD_ALIASES` 完美覆盖的那一种形状**（命中 7/7）。因此 [`synthetic-1000.md`](../docs/benchmarks/synthetic-1000.md) 写"实际标的数 2000；预期 2000"。同一套代码在真实 20 篇上只有 4 篇出标的。
 
 **影响**：若 PPT 或数据质量报告引用这个 100% 数字，评审用真实数据一验即穿。
 
@@ -324,13 +327,13 @@ hybrid   6 items: [前三项, 同样的三项再来一遍]
 
 **2026-09-25 修复状态（历史）**：按真实 ZIP/OOXML、OLE 流、PDF 和图片签名分派，保留原名。对 OLE 的 104 种唯一内容重新核验，覆盖 2234 个 DOC、1 个 XLS，其中 2172 个伪 DOCX 均识别为 DOC；不等于已转换全部 103 种 DOC。默认转换时限 120 秒，跨进程串行复用专属配置并按内容缓存。两个原超时 DOC 分别 41.151/23.767 秒成功，再次读取 0.251/0.041 秒。以下为首轮证据。
 
-2026-09-25 官方材料盘点：2172 个 .docx 实际含 WordDocument OLE 流，涉及 212 条公告，当前 DOCX 分支会报 BadZipFile；无扩展名 PDF/图片被跳过，RAR/7z/WPS 尚未覆盖。6 条正文＋附件试跑中，2 个 DOC 在当前 60 秒配置下超时。3 个外层包声明展开大小超过 200 MiB，实际深层 ZIP 仍受层数限制。P1-7 合成格式回归成立，但不代表这些真实变体已处理。证据与范围见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
+2026-09-25 官方材料盘点：2172 个 .docx 实际含 WordDocument OLE 流，涉及 212 条公告，当前 DOCX 分支会报 BadZipFile；无扩展名 PDF/图片被跳过，RAR/7z/WPS 尚未覆盖。6 条正文＋附件试跑中，2 个 DOC 在当前 60 秒配置下超时。3 个外层包声明展开大小超过 200 MiB，实际深层 ZIP 仍受层数限制。P1-7 合成格式回归成立，但不代表这些真实变体已处理。证据与范围见 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
 
 ### 1.17 正文/附件的同标的重复与需求模板候选混入 · high · 天
 
 **修复后状态**：跨文件匹配采用数值比较、包号约束及唯一兼容关系，保留双方证据；不合并不同包、同文件不同来源行、品牌/规格/数量单位冲突。采购文件按叶文件名识别，明确需求表及空模板不进成交结果和模型上下文。6 条回归 9→4：4 条需求记录被排除，1 组正文/XLS 重复合并；品牌简称与全称冲突的另一组仍保留。XLS 已补规格说明、品目分类及明确包号/成交报价列；工作簿参考编码表仍可能占用模型上下文（1.13），通用模板与别名识别未宣称完成。以下为首轮证据。
 
-实测 t20260509_26531865：正文与 XLS 同名、同价格标的分别以 1 / 1.0 数量和不同小数位保存，现有字符串去重未合并；t20260501_26507438 同时输出真实报价 PDF 和磋商文件需求表候选。P0-1 解决单文件规则/模型合并，不能代替跨文件实体、包号及材料角色对齐。需求模板是否属于最终标的须对照中标结果，不能直接把招标文件所有表格当成交清单。详见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
+实测 t20260509_26531865：正文与 XLS 同名、同价格标的分别以 1 / 1.0 数量和不同小数位保存，现有字符串去重未合并；t20260501_26507438 同时输出真实报价 PDF 和磋商文件需求表候选。P0-1 解决单文件规则/模型合并，不能代替跨文件实体、包号及材料角色对齐。需求模板是否属于最终标的须对照中标结果，不能直接把招标文件所有表格当成交清单。详见 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
 
 ### 1.18 采购包号在四个产出点各写各的，且多数识别不出来 · blocker · 小时
 
@@ -383,7 +386,7 @@ a3a6031a   items=0                 ⚠️ 标的表未解析，另一个问题
 
 其中前三条和第六条的包号已不再出现 `包1`/`合同包1` 等混写。`a3a6031a`、`08e59203` 的 0 条是标的表缺失/布局问题，不能把“没有候选”误报成包号修复失败；`7ed1fb17` 中没有原文证据的主体包号继续保留 `default`，不按顺序猜包。
 
-**历史状态（已完成）**：旧的 1038 条全量结果和 `predictions.canonical.json` 曾在包号修复前生成，已有 `default`/`包1` 记录不会自动变化。随后已用当前解析器完成独立数据集的 1038/1038 回灌；当前全量统计和边界见 [GAP 4.3](#43-官方基准数据已完成全量接入质量和口径仍待核验) 与 [`DATA_INTAKE.md`](DATA_INTAKE.md)。这次回灌仍没有官方 Gold，不能据此宣称全量字段准确率或官方成绩；名称型包号的公告级对齐限制仍按 GAP 1.19 单独记录。
+**历史状态（已完成）**：旧的 1038 条全量结果和 `predictions.canonical.json` 曾在包号修复前生成，已有 `default`/`包1` 记录不会自动变化。随后已用当前解析器完成独立数据集的 1038/1038 回灌；当前全量统计和边界见 [GAP 4.3](#43-官方基准数据已完成全量接入质量和口径仍待核验) 与 [`DATA_INTAKE.md`](../docs/DATA_INTAKE.md)。这次回灌仍没有官方 Gold，不能据此宣称全量字段准确率或官方成绩；名称型包号的公告级对齐限制仍按 GAP 1.19 单独记录。
 
 #### A-3 剩余 8 条的处置方法（2026-09-27 定）
 
@@ -505,15 +508,15 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 **PDF 回归**：原件可读，9/9 条模型候选有连续正文证据；修复页码标记边界后，9 条历史候选均被用途过滤（`9→0`），来源与解析 warning 保留。该回放不调用模型，也不等于重新抽取或最终路线评测。页内分节被压平、正文恰好包含与解析器相同格式的页标记，以及无清晰用途标题时仍是边界。
 
-**实测边界**：用途模块 26 项、融合模块 39 项、入口边界 12 项及 PDF 页标记 20 项回归通过。此次相关集合 **106 passed、2 warnings**。两份实际 PNG/BMP 缓存共 14 个历史候选均排除；另一项离线融合在原始模型缓存 `332→309`、`59→59` 包，未同时应用用途过滤，也不是原最终 317 条预测的新成绩。多包不明、字段冲突、通用型号、证据不明以及 primary 公告历史内容仍保留边界。**包数没有下降是保守策略的预期结果，不作为验收失败；只有存在独立包号映射证据时才归并。**详见 [用途报告](archive/reports/agent-attachment-scope-report.md)、[融合报告](archive/reports/agent-candidate-reconciliation-report.md)与[PDF验证报告](archive/reports/agent-gap120-pdf-validation-report.md)。
+**实测边界**：用途模块 26 项、融合模块 39 项、入口边界 12 项及 PDF 页标记 20 项回归通过。此次相关集合 **106 passed、2 warnings**。两份实际 PNG/BMP 缓存共 14 个历史候选均排除；另一项离线融合在原始模型缓存 `332→309`、`59→59` 包，未同时应用用途过滤，也不是原最终 317 条预测的新成绩。多包不明、字段冲突、通用型号、证据不明以及 primary 公告历史内容仍保留边界。**包数没有下降是保守策略的预期结果，不作为验收失败；只有存在独立包号映射证据时才归并。**详见 [用途报告](../docs/archive/reports/agent-attachment-scope-report.md)、[融合报告](../docs/archive/reports/agent-candidate-reconciliation-report.md)与[PDF验证报告](../docs/archive/reports/agent-gap120-pdf-validation-report.md)。
 
 ### 1.21 本地 QA 指标解释与 Gold 来源修订 · Gold v2 离线重评分已完成；不建立新独立留出集
 
 **三路线已完成**：10 月 9 日 Qwen attachments 运行均完成 24/24。旧字段/记录加权分保持原样；只读诊断显示 rules 完整匹配 `23/117`，hybrid/model 均 `19/117`（16.24%）。model 本地 QA 记录 recall 95% 不能解释为完整 Gold 覆盖；995 个字段 TN 中 850 来自预测独有行的空字段。新诊断并列完整精确率、固定 Gold 覆盖、TN 来源及最大完整配对，不改评分公式，不冒充官方评分器。
 
-**已生成来源修订版**：根据 [原文复核记录](archive/reports/agent-gold-source-verification.md) 另存 `backend/.data/annotation-tasks/official-holdout-20260929/revisions/20261009-source-verified-v2/gold.reviewed.v2.json`，逐条记录在同目录 `gold-revision-ledger.json`；原 `gold.reviewed.json` 的 SHA-256 保持 `8c1c98e3a5eccd9ec731c990c65bde4215e40c9a6e189039872bf6c3ef7bced9`。修订共 19 项：16 个已有名称更正、3 条服务记录补入；覆盖 ac9f 四项服务名、8d387 表头污染、3db0 三项服务漏标，以及 8895/d50b 按 E8 更细报价行名映射。数据集结构校验通过，24 公告、120 标的。此版本是来源核对修订稿，不等于新独立 Gold 或官方标签；之后用它重评分须另存报告并记录 Gold hash。
+**已生成来源修订版**：根据 [原文复核记录](../docs/archive/reports/agent-gold-source-verification.md) 另存 `backend/.data/annotation-tasks/official-holdout-20260929/revisions/20261009-source-verified-v2/gold.reviewed.v2.json`，逐条记录在同目录 `gold-revision-ledger.json`；原 `gold.reviewed.json` 的 SHA-256 保持 `8c1c98e3a5eccd9ec731c990c65bde4215e40c9a6e189039872bf6c3ef7bced9`。修订共 19 项：16 个已有名称更正、3 条服务记录补入；覆盖 ac9f 四项服务名、8d387 表头污染、3db0 三项服务漏标，以及 8895/d50b 按 E8 更细报价行名映射。数据集结构校验通过，24 公告、120 标的。此版本是来源核对修订稿，不等于新独立 Gold 或官方标签；之后用它重评分须另存报告并记录 Gold hash。
 
-**当前状态**：用户已确认来源核对修订可接受；不再把 v2 中六条报价细目列为待人工裁决。旧 rules/hybrid/model 预测已完成 v2 `local_proxy` 离线重评分，报告和 Gold hash 保存在优先级 1 回放报告所列的忽略目录，旧预测与旧报告未覆盖。该集合已参与诊断与实现整改，之后同集只能作为开发回归。用户已决定不建立新的独立留出集；因此不再把独立集标注和 `stage=final` 评测列作当前待办，也不据 24 条本地结果宣称独立泛化能力。详见 [独立审计报告](archive/reports/agent-evaluation-semantics-audit.md) 与[优先级 1 回放报告](archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
+**当前状态**：用户已确认来源核对修订可接受；不再把 v2 中六条报价细目列为待人工裁决。旧 rules/hybrid/model 预测已完成 v2 `local_proxy` 离线重评分，报告和 Gold hash 保存在优先级 1 回放报告所列的忽略目录，旧预测与旧报告未覆盖。该集合已参与诊断与实现整改，之后同集只能作为开发回归。用户已决定不建立新的独立留出集；因此不再把独立集标注和 `stage=final` 评测列作当前待办，也不据 24 条本地结果宣称独立泛化能力。详见 [独立审计报告](../docs/archive/reports/agent-evaluation-semantics-audit.md) 与[优先级 1 回放报告](../docs/archive/reports/agent-gap-priority1-cache-only-replay-report.md)。
 
 ---
 
@@ -602,7 +605,7 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 **当前状态（2026-10-08）：已同步 SQLite、Neo4j、API、前端与独立 oracle。** 中标供应商新增 `award_project_count`，合作频次按项目去重排序；原 `award_package_count` 仍为采购包数。场景一品牌保留 `project_count`、`package_count`，金额仅来自已披露标的总价。场景四保持“所选供应商均合作过的采购单位”交集，项目数按各供应商分别统计（`project_count_scope=per_supplier_at_common_buyer`），不强制共同项目或同包中标。金额按唯一 award 记录累加，等额的不同记录都计入，未知金额仍为未知。
 
-本轮后端 **364 passed、0 skipped**（含 Docker Neo4j 5.26.14）、Ruff 通过，前端 **33 passed** 和构建通过。24 条 reviewed tuning Gold 的 SQLite/Neo4j 独立 oracle 各 **6471/6471**，返回对照 **6471/6471**；新报告保存在 `.data/query-validation/gap-2.12-20261008-185019/tuning-neo4j.json`，历史报告未覆盖。详见 [修复报告](archive/reports/agent-gap-2.12-report.md)。这是依据原文的团队实现与本地验收，不能写成官方确认的评分规则。
+本轮后端 **364 passed、0 skipped**（含 Docker Neo4j 5.26.14）、Ruff 通过，前端 **33 passed** 和构建通过。24 条 reviewed tuning Gold 的 SQLite/Neo4j 独立 oracle 各 **6471/6471**，返回对照 **6471/6471**；新报告保存在 `.data/query-validation/gap-2.12-20261008-185019/tuning-neo4j.json`，历史报告未覆盖。详见 [修复报告](../docs/archive/reports/agent-gap-2.12-report.md)。这是依据原文的团队实现与本地验收，不能写成官方确认的评分规则。
 
 ### 2.8 任务三标的物检索只开放 3/7 个字段的筛选 · medium · 小时
 
@@ -614,7 +617,7 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 ### 2.10 查询效率未按赛题口径测过 · low · 小时
 
-**证据**：[`synthetic-1000.md`](benchmarks/synthetic-1000.md) 自己声明「不含 HTTP、网络或前端渲染；不等同竞赛响应时间」。补测的 HTTP 层（300 篇库）5 个端点 p50 为 5.12/5.38/5.70/4.88/5.91 ms，远低于 1 秒。但赛题口径是「前端发起请求至结果**完全渲染完毕**的总时长」。另 `common_projects` 在合成集上已到 321ms，是唯一逼近 1 秒的场景。
+**证据**：[`synthetic-1000.md`](../docs/benchmarks/synthetic-1000.md) 自己声明「不含 HTTP、网络或前端渲染；不等同竞赛响应时间」。补测的 HTTP 层（300 篇库）5 个端点 p50 为 5.12/5.38/5.70/4.88/5.91 ms，远低于 1 秒。但赛题口径是「前端发起请求至结果**完全渲染完毕**的总时长」。另 `common_projects` 在合成集上已到 321ms，是唯一逼近 1 秒的场景。
 
 **修法**：补一个浏览器 DevTools Performance 或 Playwright 计时的截图，即可把 5 分变成可举证。
 
@@ -715,11 +718,11 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 赛题七(三)6 是硬门槛：采用基座模型+外挂调优方案应使用赛事组提供的标准模型资源并声明版本与参数规模，训调方案须出具佐证材料。
 
-**2026-10-01 复核（历史）**：本机配置的模型 ID 为 `deepseek-v4-flash`；未提供发布版本、参数规模、基座/微调状态或资源来源证明。[模型端点配置与验收说明](MODEL_ENDPOINT_ACCEPTANCE.md)保留换端点登记和验收要求；这些字段在决赛官方 API 发放后据实填写。
+**2026-10-01 复核（历史）**：本机配置的模型 ID 为 `deepseek-v4-flash`；未提供发布版本、参数规模、基座/微调状态或资源来源证明。[模型端点配置与验收说明](../docs/MODEL_ENDPOINT_ACCEPTANCE.md)保留换端点登记和验收要求；这些字段在决赛官方 API 发放后据实填写。
 
 ### 4.3 官方基准数据已完成全量接入，质量和口径仍待核验 · high · 天
 
-**2026-09-28 当前状态**：独立数据集完成 1038/1038 公告端到端导入，0 条最终失败；修复后全量回灌统计为参与主体 5009、中标记录 1315，`default` 包号 461/1658。全量仍没有官方 Gold，也没有官方逐条 ground-truth；24 条 reviewed gold 是团队自行对照原文建立的本地抽样集，不能据此宣称 1038 条全量抽取准确率或官方成绩。全量运行使用 rules + 本地 RapidOCR，87 个无效下载附件、少量不支持格式、PDF 流错误和损坏成员仍需人工/数据方处理。运行证据见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md) 与 [机器摘要](benchmarks/official-full-20260926.json)。
+**2026-09-28 当前状态**：独立数据集完成 1038/1038 公告端到端导入，0 条最终失败；修复后全量回灌统计为参与主体 5009、中标记录 1315，`default` 包号 461/1658。全量仍没有官方 Gold，也没有官方逐条 ground-truth；24 条 reviewed gold 是团队自行对照原文建立的本地抽样集，不能据此宣称 1038 条全量抽取准确率或官方成绩。全量运行使用 rules + 本地 RapidOCR，87 个无效下载附件、少量不支持格式、PDF 流错误和损坏成员仍需人工/数据方处理。运行证据见 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md) 与 [机器摘要](../docs/benchmarks/official-full-20260926.json)。
 
 **2026-09-25 状态（历史）**：官方材料已到，只有递归文件头盘点、正文规则基线及 6 条附件试跑；当时无完整全量入库。以下仍保留到货前开发集背景。
 
@@ -737,7 +740,7 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 ### 4.5 评审登录与局域网访问 · 已实现
 
-**历史状态（2026-09-28；后续团队反馈跨设备使用正常）**：P1-5 已实现单评审账号、HMAC 签名 HttpOnly Cookie、账号配置脚本和 [`REVIEWER_GUIDE.md`](REVIEWER_GUIDE.md)。本机登录/API 保护/退出流程已自动化验证；第二台物理设备的局域网登录、Cookie 持久化和防火墙访问仍未验收。
+**历史状态（2026-09-28；后续团队反馈跨设备使用正常）**：P1-5 已实现单评审账号、HMAC 签名 HttpOnly Cookie、账号配置脚本和 [`REVIEWER_GUIDE.md`](../docs/REVIEWER_GUIDE.md)。本机登录/API 保护/退出流程已自动化验证；第二台物理设备的局域网登录、Cookie 持久化和防火墙访问仍未验收。
 
 **修复前证据（历史）**：赛题八要求提供评审方登录系统的操作说明及账号；此前全仓库没有登录页、用户表、权限或会话，README 也只有开发者本地启动步骤。
 
@@ -749,29 +752,29 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 ### 4.7 模型换端点后的验收清单与失败保护 · high · 小时
 
-**2026-10-01 部分完成**：新增[模型端点配置与验收说明](MODEL_ENDPOINT_ACCEPTANCE.md)，说明模型配置优先级、参数、版本/资源来源证据和换端点步骤。适配器错误 warning 区分 401/403、429、超时、非法/截断 JSON、长度截断和请求参数拒绝；后台失败路径在入库及成功检查点前停止，支持显式重试。mock 回归覆盖这些异常和拒绝 `chat_template_kwargs` 的 400。
+**2026-10-01 部分完成**：新增[模型端点配置与验收说明](../docs/MODEL_ENDPOINT_ACCEPTANCE.md)，说明模型配置优先级、参数、版本/资源来源证据和换端点步骤。适配器错误 warning 区分 401/403、429、超时、非法/截断 JSON、长度截断和请求参数拒绝；后台失败路径在入库及成功检查点前停止，支持显式重试。mock 回归覆盖这些异常和拒绝 `chat_template_kwargs` 的 400。
 
 仍需命题方/服务方提供实际模型资源后，在获准长样本上验收 SSE、JSON 与输出完整性。mock 和短连接探测不代表赛事端点已验证；未对 1038 条官方数据做本项回放。
 
 ### 4.8 自测「准确率」是本地自创定义，与官方口径的关系没有说明 · 已修（评测口径文档）
 
-**当前状态**：[`EVALUATION.md`](EVALUATION.md) 已明确字段/记录/实体匹配、Hungarian 一对一对齐、金额和数量容差、空值，以及历史 `local_proxy` 开放抽取代理。根据赛题答疑新增 `official_qa` P/N 四格解释，Accuracy 使用 `(TP+TN)/(TP+FP+TN+FN)`；该解释仍是团队本地实现，不能把任一 profile 称为官方成绩。`route_evaluation_report.py` 还记录包号集合对齐、重复候选、请求/耗时/token 和附件/OCR覆盖。正式报告采用可追溯的本地开发回归记录，注明 Gold/profile 和日期。
+**当前状态**：[`EVALUATION.md`](../docs/EVALUATION.md) 已明确字段/记录/实体匹配、Hungarian 一对一对齐、金额和数量容差、空值，以及历史 `local_proxy` 开放抽取代理。根据赛题答疑新增 `official_qa` P/N 四格解释，Accuracy 使用 `(TP+TN)/(TP+FP+TN+FN)`；该解释仍是团队本地实现，不能把任一 profile 称为官方成绩。`route_evaluation_report.py` 还记录包号集合对齐、重复候选、请求/耗时/token 和附件/OCR覆盖。正式报告采用可追溯的本地开发回归记录，注明 Gold/profile 和日期。
 
 **以下是修复前历史证据**：赛题只写准确率/精确率/召回率，没给定义；此前 `evaluation.py` 的本地代理、真阴性缺失、阈值和容差没有在交付文档中集中说明。
 
 ### 4.9 后台批量处理：具备同机有界并发，生产容量和多机部署仍需验证 · high · 天
 
-**当前状态（2026-10-09）**：生产任务与三路线评测器已接入共享的宿主机资源额度。所有 API worker、后台协调器和评测进程使用同一台机器上的同一个本地 `JOB_RUNTIME_DIR` 时，文件锁会共享并发额度；默认 `JOB_WORKERS=2`、`DOCUMENT_WORKERS=1`、`MODEL_CONCURRENCY=2`、模型等待队列 8。后台可按公告并行，模型请求、文档转换和队列分别设上限；同一服务多个 Uvicorn worker 可共用额度。包含 PDF 页码用途修复的当前全量后端回归 **521 passed、3 skipped、2 warnings**，Ruff 通过。该实现不提供 NFS/跨主机的分布式锁、统一配额或跨批次公平调度；真实模型供应商、生产附件、真实 Web 流量及 Ubuntu 决赛服务器的容量仍需单独验收。细节与部署约束见[有界并发生产任务](bounded-jobs.md)、[三路线评测器](bounded-route-evaluation.md)和[验证记录](archive/reports/bounded-validation.md)。
+**当前状态（2026-10-09）**：生产任务与三路线评测器已接入共享的宿主机资源额度。所有 API worker、后台协调器和评测进程使用同一台机器上的同一个本地 `JOB_RUNTIME_DIR` 时，文件锁会共享并发额度；默认 `JOB_WORKERS=2`、`DOCUMENT_WORKERS=1`、`MODEL_CONCURRENCY=2`、模型等待队列 8。后台可按公告并行，模型请求、文档转换和队列分别设上限；同一服务多个 Uvicorn worker 可共用额度。包含 PDF 页码用途修复的当前全量后端回归 **521 passed、3 skipped、2 warnings**，Ruff 通过。该实现不提供 NFS/跨主机的分布式锁、统一配额或跨批次公平调度；真实模型供应商、生产附件、真实 Web 流量及 Ubuntu 决赛服务器的容量仍需单独验收。细节与部署约束见[有界并发生产任务](../docs/bounded-jobs.md)、[三路线评测器](../docs/bounded-route-evaluation.md)和[验证记录](../docs/archive/reports/bounded-validation.md)。
 
-**2026-09-26 历史实跑记录**：持久任务、逐公告检查点、文件哈希检查、幂等入库、暂停/续跑和失败重试已实现；1038 条官方数据完成首轮处理及 21 条恢复/重算，最终 1038 完成、0 失败。首轮暴露 13 条 Windows 进度文件写入竞争；共享锁修复后实际续跑通过。全量使用 3 个本机进程，活跃墙钟按检查点估算约 66 分 45 秒；不能代表多用户并发、另一台机器或模型模式性能。完整证据见 [官方接入检查](archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
+**2026-09-26 历史实跑记录**：持久任务、逐公告检查点、文件哈希检查、幂等入库、暂停/续跑和失败重试已实现；1038 条官方数据完成首轮处理及 21 条恢复/重算，最终 1038 完成、0 失败。首轮暴露 13 条 Windows 进度文件写入竞争；共享锁修复后实际续跑通过。全量使用 3 个本机进程，活跃墙钟按检查点估算约 66 分 45 秒；不能代表多用户并发、另一台机器或模型模式性能。完整证据见 [官方接入检查](../docs/archive/reports/OFFICIAL_INTAKE_REVIEW.md)。
 
 以下是实现前的历史证据：`storage.py` 当时只有 `PRAGMA foreign_keys=ON`，导入走分钟级同步请求，没有后台作业、进度端点或断点续跑；相关旧耗时不再代表当前批处理。
 
 ### 4.10 任务二查询口径写死在 SQL 里 · 已修（GAP 6a）
 
-**当前状态**：已按答疑迁移默认参与方为 `winner`、`nonwinner`、`unknown`，显式 `include_winners=false` 只统计明确 `nonwinner`。独立 oracle 从 24 条 reviewed tuning Gold 计算五类查询期望，`qa-semantics-20261007-v2.json` 对 SQLite 的 **6471/6471** 项通过；该报告未运行 Neo4j。历史 SQLite/Neo4j 双后端 **6471/6471** 对照属于迁移前口径，不能当作本轮结果。项目粒度、产品供应商品牌聚合与金额来源已写入 [`QUERY_SEMANTICS.md`](QUERY_SEMANTICS.md)；官方不提供 Gold，这些结果只能证明团队口径下的实现行为。
+**当前状态**：已按答疑迁移默认参与方为 `winner`、`nonwinner`、`unknown`，显式 `include_winners=false` 只统计明确 `nonwinner`。独立 oracle 从 24 条 reviewed tuning Gold 计算五类查询期望，`qa-semantics-20261007-v2.json` 对 SQLite 的 **6471/6471** 项通过；该报告未运行 Neo4j。历史 SQLite/Neo4j 双后端 **6471/6471** 对照属于迁移前口径，不能当作本轮结果。项目粒度、产品供应商品牌聚合与金额来源已写入 [`QUERY_SEMANTICS.md`](../docs/QUERY_SEMANTICS.md)；官方不提供 Gold，这些结果只能证明团队口径下的实现行为。
 
-以下是修复前证据，保留用于追溯：[`QUERY_SEMANTICS.md`](QUERY_SEMANTICS.md) 曾列出 6 条待确认歧义，且只有 `include_winners` 做成了参数；当时没有“给定语料 → 期望结果”的自建回归。官方样例不会发放，后续若队伍选择调整口径，应同步修改查询、oracle、前端标签和该文档。
+以下是修复前证据，保留用于追溯：[`QUERY_SEMANTICS.md`](../docs/QUERY_SEMANTICS.md) 曾列出 6 条待确认歧义，且只有 `include_winners` 做成了参数；当时没有“给定语料 → 期望结果”的自建回归。官方样例不会发放，后续若队伍选择调整口径，应同步修改查询、oracle、前端标签和该文档。
 
 ### 4.11 官方 ZIP 中文文件名乱码会导致附件整体失配 · medium · 小时
 
@@ -809,9 +812,9 @@ _NAMED_VALUE_RE = re.compile(r"^(?:分包名称|标段名称|采购包名称|包
 
 | 现在 | 内容 |
 |---|---|
-| [`ONBOARDING.md`](ONBOARDING.md) | 接手必读（人 + AI agent 共用）：怎么跑、红线、已解决的坑、性能优化判据 |
+| [`ONBOARDING.md`](../docs/ONBOARDING.md) | 接手必读（人 + AI agent 共用）：怎么跑、红线、已解决的坑、性能优化判据 |
 | [`CHANGELOG.md`](CHANGELOG.md) | 历史决策、验收边界、排查经过（按日期倒序） |
-| [`GAP_ANALYSIS.md`](GAP_ANALYSIS.md) | 本文——唯一的问题清单 |
+| [`GAP_ANALYSIS.md`](GAP_ANALYSIS-2026-10-11.md) | 本文——唯一的问题清单 |
 
 删除 `HANDOFF.md`、`AGENT_BRIEF.md`、`P0_VERIFICATION.md`、`DEVELOPMENT_CORPUS.md`，内容按性质并入上述三份，无信息丢失（经过 → CHANGELOG，结论 → ONBOARDING）。
 

@@ -1,4 +1,7 @@
-# 赛题五 QA 合规矩阵
+# 赛题五 QA 合规矩阵（2026-10-11 历史快照）
+
+> **历史快照。** 本文于 2026-10-12 移出当前文档入口；其中的状态、优先级、行号、指标和验收记录仅描述当时范围，不代表当前任务或成绩。当前项目说明见 [README](../README.md) 和 [文档导航](../docs/DOCUMENTATION_INDEX.md)；本归档目录见 [索引](README.md)。
+
 
 更新日期：2026-10-11（当前验收：后端 662 passed、7 skipped、2 warnings；前端 80 passed 与构建通过；Ruff 通过）
 
@@ -36,7 +39,7 @@
 | Vue/Python 栈 | 任务三推荐 Vue 前端、Python 后端 | `frontend/` Vue、`backend/` FastAPI/Python；前端测试和构建、后端测试 | 已实现 | 不能把构建通过当作现场平台验收 | 在源码包标注版本和启动步骤 |
 | 查询效率 | 五场景各执行一次，响应为前端发起到结果完全渲染；阈值决赛 <1 秒得满分 | `backend/app/benchmark.py`、`docs/DEVELOPMENT.md`、既有性能快照 | 代码已实现但未现场验收 | Python/SQLite 或本机 HTTP 基准不等同命题方统一平台和浏览器渲染耗时 | 在统一平台记录五场景前端端到端平均响应时间 |
 | 过程性文档 | 技术路线对比分析、数据质量分析，Word/PDF | [`deliverables/technical-route-report.md`](../deliverables/technical-route-report.md)、[`deliverables/data-quality-report.md`](../deliverables/data-quality-report.md) | Word/PDF 与 Markdown 源稿已完成 | 格式已生成，指标仍按本地回归范围解释 | 已导出并逐页检查，修改源稿后同步更新正式文件 |
-| 系统设计文档 | Word/PDF；业务需求、技术选型、数据模型、功能设计、功能测试效果五模块 | [`deliverables/system-design-report.md`](../deliverables/system-design-report.md)、[`docs/ARCHITECTURE.md`](ARCHITECTURE.md) | Word/PDF 与 Markdown 源稿已完成 | 报告覆盖五模块及核心亮点预览 | 已导出并逐页检查，保留工程证据与运行边界 |
+| 系统设计文档 | Word/PDF；业务需求、技术选型、数据模型、功能设计、功能测试效果五模块 | [`deliverables/system-design-report.md`](../deliverables/system-design-report.md)、[`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) | Word/PDF 与 Markdown 源稿已完成 | 报告覆盖五模块及核心亮点预览 | 已导出并逐页检查，保留工程证据与运行边界 |
 | 汇报 PPT | 完整演示 PPT，含核心内容预览 | deliverables/presentation-outline.md | 内容大纲已整理 | 大纲不是 PPT 媒体文件 | 按初赛格式制作并检查展示效果 |
 | 汇报视频与系统演示 | 1080p 横屏 MP4；汇报 ≤10 分钟，系统演示 ≤5 分钟 | deliverables/pitch-video-script.md、demo-video-script.md | 两类脚本已整理 | 脚本不是已录制视频 | 按脚本录制并检查画面、声音、时长和完整流程 |
 | 源码及配套资料 | 工程文件、版本/环境、注释、官方数据集提取结果、任务二模型、说明文档 | 仓库源码、`README.md`、`docs/DEVELOPMENT.md`、`backend/neo4j_runtime/README.md` | 代码已实现但交付包未验收 | `.data`、密钥、Gold、原始材料不能直接打包；当前未形成最终压缩包 | 从干净检出按白名单打包，附版本、运行和数据说明，排除敏感/大体积运行产物 |
