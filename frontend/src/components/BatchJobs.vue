@@ -24,7 +24,8 @@ let lastDone = -1
 let browserRequest = 0
 let preflightRequest = 0
 let createRequest = 0
-const client = createDatasetClient(() => props.datasetId, () => version)
+const apiFetch = (url, options = {}) => fetch(url, { ...options, credentials: 'include' })
+const client = createDatasetClient(() => props.datasetId, () => version, apiFetch)
 const labels = { queued: '等待启动', running: '处理中', paused: '已暂停', interrupted: '已中断，可续跑', completed: '已完成', completed_with_errors: '完成，有失败公告' }
 
 async function request(path, options) {

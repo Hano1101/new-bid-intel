@@ -147,6 +147,11 @@ test('directory navigation and preflight state feed the visible preview before c
       directory_id: 'batch', preflight_fingerprint: 'fingerprint-001', mode: 'hybrid', ocr: true,
     })
     assert.equal(created.options.headers.get('X-Dataset-ID'), 'dataset-a')
+    await view.state.refresh()
+    assert.ok(requests.some(({ url, options }) => url.pathname.endsWith('/jobs') && options.method !== 'POST'),
+      'initial load, polling refresh, and post-create refresh use the dataset client')
+    assert.ok(requests.every(({ options }) => options.credentials === 'include'),
+      'list, directory browsing, preflight, create, and refresh requests include session cookies')
   } finally { view.unmount() }
 })
 
@@ -457,7 +462,9 @@ test('an old task creation cannot clear new dataset loading and keeps the select
 
 test('pause, resume, and failed retry keep their POST routes and dataset headers', async (t) => {
   const actions = []
+  const requests = []
   t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    requests.push({ url: new URL(url), options })
     if (options.method === 'POST') actions.push({ url: new URL(url), options })
     return response(options.method === 'POST' ? { message: 'ok' } : [])
   })
@@ -473,5 +480,32 @@ test('pause, resume, and failed retry keep their POST routes and dataset headers
       '/api/v1/jobs/job-one/resume?retry_failed=true',
     ])
     assert.ok(actions.every(({ options }) => options.headers.get('X-Dataset-ID') === 'dataset-a'))
+    assert.ok(requests.every(({ options }) => options.credentials === 'include'),
+      'job controls and the list refreshes after them include session cookies')
   } finally { view.unmount() }
+})
+
+test('downloading a job report includes session cookies on its cross-origin GET', async (t) => {
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    requests.push({ url: new URL(url), options })
+    return response({ job_id: 'job-one' })
+  })
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  globalThis.document = { createElement: () => ({ click() {} }) }
+  const view = await mount({ apiBase: 'http://api.test', datasetId: 'dataset-a' })
+  try {
+    await settle()
+    requests.length = 0
+    await view.state.report({ id: 'job-one' })
+
+    assert.equal(requests.length, 1)
+    assert.equal(requests[0].url.pathname, '/api/v1/jobs/job-one/report')
+    assert.equal(requests[0].options.credentials, 'include')
+    assert.equal(requests[0].options.headers.get('X-Dataset-ID'), 'dataset-a')
+  } finally {
+    view.unmount()
+    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
+    else delete globalThis.document
+  }
 })
