@@ -10,6 +10,28 @@ from typing import Any
 from app.evidence import ITEM_FIELDS, field_state, has_field_evidence
 from app.schemas import ImportResult
 
+BIDDER_RESULT_DETAILS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS bidder_result_details (
+    id INTEGER PRIMARY KEY,
+    notice_id INTEGER NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+    package_code TEXT NOT NULL DEFAULT 'default',
+    raw_name TEXT NOT NULL,
+    qualification_status TEXT,
+    compliance_status TEXT,
+    review_status TEXT,
+    bid_amount TEXT,
+    evaluation_score TEXT,
+    unsuccessful_reason TEXT,
+    source_file TEXT,
+    source_location TEXT,
+    source_evidence TEXT,
+    field_evidence_json TEXT NOT NULL DEFAULT '{}',
+    detail_hash TEXT NOT NULL,
+    UNIQUE(notice_id, detail_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_bidder_result_notice ON bidder_result_details(notice_id, package_code);
+"""
+
 SCHEMA = """
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS notices (
@@ -81,6 +103,7 @@ CREATE TABLE IF NOT EXISTS bid_participations (
     source_evidence TEXT,
     UNIQUE(package_id, organization_id)
 );
+""" + BIDDER_RESULT_DETAILS_SCHEMA + """
 CREATE TABLE IF NOT EXISTS awards (
     id INTEGER PRIMARY KEY,
     package_id INTEGER NOT NULL REFERENCES packages(id) ON DELETE CASCADE,
@@ -191,6 +214,89 @@ def _decimal_text(value: Decimal | None) -> str | None:
     return str(value) if value is not None else None
 
 
+_BIDDER_DETAIL_FIELDS = (
+    "package_code", "raw_name", "qualification_status", "compliance_status", "review_status",
+    "bid_amount", "evaluation_score", "unsuccessful_reason", "source_file", "source_location",
+    "source_evidence",
+)
+
+
+def initialize_bidder_result_details(connection: sqlite3.Connection) -> None:
+    """Add only the download sidecar tables, retaining the caller's transaction."""
+    for statement in BIDDER_RESULT_DETAILS_SCHEMA.split(";"):
+        if statement.strip():
+            connection.execute(statement)
+
+
+def save_bidder_result_details(
+    connection: sqlite3.Connection, notice_id: int, details: list[dict[str, Any]],
+) -> int:
+    """Append source facts for standard downloads without changing the extraction projection.
+
+    Keep distinct observations, including contradictory values, so the export
+    merger can leave conflicts blank. A retry only deduplicates identical facts
+    and their provenance; it must never overwrite a prior conflicting row.
+    The caller owns the transaction and must initialize the database first.
+    """
+    from app.package_codes import normalize_package_code
+
+    inserted = 0
+    for detail in details:
+        name = str(detail.get("raw_name") or "").strip()
+        if not name:
+            continue
+        values = {
+            field: str(detail[field]) if detail.get(field) is not None else None
+            for field in _BIDDER_DETAIL_FIELDS
+        }
+        for field in ("bid_amount", "evaluation_score"):
+            if values[field] is not None:
+                try:
+                    number = Decimal(values[field])
+                    if number.is_finite():
+                        values[field] = format(number.normalize(), "f")
+                except (ArithmeticError, ValueError):
+                    pass
+        values.update(package_code=normalize_package_code(detail.get("package_code")), raw_name=name)
+        evidence_json = json.dumps(
+            detail.get("field_evidence") or {}, ensure_ascii=False, sort_keys=True,
+            separators=(",", ":"), default=str,
+        )
+        payload = json.dumps(
+            {**values, "field_evidence": json.loads(evidence_json)}, ensure_ascii=False,
+            sort_keys=True, separators=(",", ":"),
+        )
+        detail_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        cursor = connection.execute(
+            """INSERT OR IGNORE INTO bidder_result_details (
+                notice_id, package_code, raw_name, qualification_status, compliance_status,
+                review_status, bid_amount, evaluation_score, unsuccessful_reason,
+                source_file, source_location, source_evidence, field_evidence_json, detail_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (notice_id, *(values[field] for field in _BIDDER_DETAIL_FIELDS), evidence_json, detail_hash),
+        )
+        inserted += cursor.rowcount
+    return inserted
+
+
+def read_bidder_result_details(
+    connection: sqlite3.Connection, notice_id: int,
+) -> list[dict[str, Any]]:
+    """Return original source observations; callers may merge them for display."""
+    if not connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='bidder_result_details'",
+    ).fetchone():
+        return []
+    records = []
+    for row in connection.execute(
+        "SELECT * FROM bidder_result_details WHERE notice_id=? ORDER BY id", (notice_id,),
+    ):
+        record = {field: row[field] for field in _BIDDER_DETAIL_FIELDS}
+        record["field_evidence"] = json.loads(row["field_evidence_json"])
+        records.append(record)
+    return records
+
+
 def _normalized_entity_name(name: str) -> str:
     # Conservative normalization only. Do not fuzzy-merge branches or similar names
     # before the official reference data establishes that they are the same entity.
@@ -226,6 +332,7 @@ def save_import(
     version_identity: dict[str, str] | None = None,
     version_reason: str = "notice_import",
     version_packages: list[dict[str, Any]] | None = None,
+    bidder_result_details: list[dict[str, Any]] | None = None,
 ) -> ImportResult:
     initialize(path)
     with connect(path) as connection:
@@ -240,6 +347,7 @@ def save_import(
                 'SELECT notice_id FROM import_receipts WHERE source_key = ?', (source_key,),
             ).fetchone()
             if prior is not None and not replace_existing:
+                save_bidder_result_details(connection, prior['notice_id'], bidder_result_details or [])
                 return result.model_copy(update={'notice_id': prior['notice_id']})
             if prior is not None:
                 if not connection.execute(
@@ -396,6 +504,7 @@ def save_import(
                     item.confidence,
                 ),
             )
+        save_bidder_result_details(connection, notice_id, bidder_result_details or [])
         from app.notice_versions import capture_version
         version = capture_version(
             connection,
@@ -419,6 +528,7 @@ def save_import(
                 connection.execute('DELETE FROM notices WHERE id=?', (notice_id,))
                 connection.execute('DELETE FROM notice_version_links WHERE notice_id=?', (notice_id,))
                 notice_id = duplicate_notice_id
+                save_bidder_result_details(connection, notice_id, bidder_result_details or [])
         if source_key is not None:
             connection.execute('INSERT OR REPLACE INTO import_receipts VALUES (?, ?)',
                                (source_key, notice_id))

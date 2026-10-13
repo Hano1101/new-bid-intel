@@ -29,6 +29,7 @@ from app.jobs_api import router as jobs_router
 from app.model_adapter import test_model_connection
 from app.parsers import SourceDocument, parser_capabilities
 from app.relation_api import router as relation_clues_router
+from app.results_api import router as results_router
 from app.review_queue import router as review_queue_router
 from app.schemas import (
     BatchImportResult,
@@ -106,6 +107,7 @@ app.include_router(datasets_router)
 app.include_router(graph_router)
 app.include_router(jobs_router)
 app.include_router(relation_clues_router)
+app.include_router(results_router)
 app.include_router(review_queue_router)
 app.include_router(controlled_query_router_for())
 app.include_router(version_router)

@@ -11,6 +11,7 @@ import ControlledQuery from './components/ControlledQuery.vue'
 import ReviewQueue from './components/ReviewQueue.vue'
 import { resolveApiBase } from './utils/browser.js'
 import { createDatasetClient } from './utils/datasets.js'
+import { downloadNoticeResults } from './utils/resultWorkbook.js'
 import { formatAmount } from './utils/amountPolicy.js'
 import { outcomeLabel, participationScopeLabel, productSupplierEvidence, productSupplierMetrics } from './utils/analyticsPresentation.js'
 import { navigationGroups, resolveSection, sectionHash, sectionTransition } from './utils/navigation.js'
@@ -19,6 +20,7 @@ const apiBase = resolveApiBase(import.meta.env.VITE_API_BASE, window.location, i
 const activeSection = ref(resolveSection(window.location.hash))
 const selectedFiles = ref([])
 const uploading = ref(false)
+const downloadingResults = ref(false)
 const notice = ref(null)
 const batchResult = ref(null)
 const error = ref('')
@@ -160,6 +162,19 @@ async function importBatch() {
     error.value = cause.message || '批量导入失败，请检查文件和后端服务'
   } finally {
     uploading.value = false
+  }
+}
+
+async function downloadCurrentResults(noticeIds, filename) {
+  if (downloadingResults.value) return
+  downloadingResults.value = true
+  error.value = ''
+  try {
+    await downloadNoticeResults(datasetFetch, apiBase, noticeIds, filename)
+  } catch (cause) {
+    if (cause.name !== 'AbortError') error.value = cause.message || '标准结果表下载失败'
+  } finally {
+    downloadingResults.value = false
   }
 }
 
@@ -530,6 +545,9 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncSectionFromHa
         <p v-for="warning in notice.warnings" :key="warning">{{ warning }}</p>
       </div>
       <div class="button-row evidence-entry">
+        <button type="button" class="primary" :disabled="downloadingResults" @click="downloadCurrentResults([notice.notice_id], `任务三标准结果表-${notice.notice_id}.xlsx`)">
+          {{ downloadingResults ? '正在生成结果表…' : '下载标准结果表' }}
+        </button>
         <button type="button" class="secondary" @click="openNoticeDetail(notice.notice_id)">查看公告与来源证据 <span>→</span></button>
       </div>
     </section>
@@ -549,6 +567,11 @@ onBeforeUnmount(() => window.removeEventListener('hashchange', syncSectionFromHa
         <p v-for="warning in batchResult.warnings || []" :key="warning">{{ warning }}</p>
         <p v-for="file in batchResult.orphan_files" :key="file">附件未能按文件名匹配公告：{{ file }}</p>
         <p v-for="entry in batchResult.errors" :key="entry">{{ entry }}</p>
+      </div>
+      <div class="button-row evidence-entry">
+        <button type="button" class="primary" :disabled="downloadingResults || !batchResult.notices.some(row => row.notice_id)" @click="downloadCurrentResults(batchResult.notices.map(row => row.notice_id), '任务三批量标准结果表.xlsx')">
+          {{ downloadingResults ? '正在生成结果表…' : '下载本批标准结果表' }}
+        </button>
       </div>
       <details v-for="row in batchResult.notices" :key="row.notice_id" class="batch-note">
         <summary>{{ row.source_files[0] }} · {{ row.items_found }} 条标的 · {{ row.warnings.length }} 条提示</summary>

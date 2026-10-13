@@ -5,6 +5,7 @@ import re
 import time
 import unicodedata
 from pathlib import PurePosixPath
+from typing import Any
 
 from app.attachment_scope import (
     classify_attachment_scope,
@@ -499,6 +500,66 @@ def _unfilled_template(text: str, items: list[ItemCandidate]) -> bool:
     )
 
 
+def _current_bidder_result_details(
+    document: SourceDocument, text: str, scope=None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Apply the existing attachment-purpose gate to download-only source facts."""
+    from app.bidder_result_details import extract_bidder_details
+
+    if scope is not None and not scope.extract_participants:
+        return [], []
+    try:
+        details = extract_bidder_details(document)
+    except Exception as exc:  # noqa: BLE001 - download-only parser must not block import
+        return [], [f"{document.filename}: 自助结果明细补充失败（{type(exc).__name__}）"]
+    if scope is None or scope.scope != "mixed":
+        return details, []
+    candidates = [ParticipantCandidate(
+        package_code=record.get("package_code"), organization_name=record["raw_name"],
+        source_file=document.filename, source_location=record.get("source_location") or "",
+        source_evidence=record.get("scope_evidence") or record.get("source_evidence") or "",
+    ) for record in details]
+    kept, warnings = filter_attachment_participants(document.filename, text, candidates, scope)
+    allowed = {id(row) for row in kept}
+    return [record for record, candidate in zip(details, candidates)
+            if id(candidate) in allowed], warnings
+
+
+def extract_scoped_bidder_details(
+    expanded: list[SourceDocument], *, parse_options: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Supplement a cached import using source bytes and the same upload scope rules.
+
+    This helper never calls a model or changes the ImportResult/cache contract.
+    Use the parser module directly: background jobs replace the ingestion parser
+    with a cache wrapper whose resource lease cannot be recursively acquired.
+    """
+    from app import parsers
+
+    if not expanded:
+        return []
+    html_documents = [document for document in expanded
+                      if document.filename.lower().endswith((".html", ".htm"))]
+    if len(html_documents) > 1:
+        raise ValueError("投标明细补充必须对应一条公告")
+    primary = html_documents[0] if html_documents else expanded[0]
+    records = []
+    for document in expanded:
+        if (html_documents and document != primary
+                and _reference_attachment(document.filename)):
+            continue
+        text, items, _, _ = parsers.parse_document_with_participants(
+            document, **(parse_options or {}),
+        )
+        if document != primary and _unfilled_template(text, items):
+            continue
+        scope = (classify_attachment_scope(document.filename, text)
+                 if document != primary else None)
+        details, _ = _current_bidder_result_details(document, text, scope)
+        records.extend(details)
+    return records
+
+
 def _deduplicate_participants(
     participants: list[ParticipantCandidate], warnings: list[str]
 ) -> list[ParticipantCandidate]:
@@ -589,6 +650,7 @@ def _ingest_expanded(
 
     items: list[ItemCandidate] = []
     participants: list[ParticipantCandidate] = []
+    bidder_details: list[dict[str, Any]] = []
     source_texts: dict[str, str] = {}
     source_metadata: dict[str, NoticeMetadata] = {}
     metadata_sources: list[tuple[str, NoticeMetadata, dict[str, dict[str, str]], dict[str, str]]] = []
@@ -637,6 +699,10 @@ def _ingest_expanded(
                 document.filename, text, parsed_participants, scope,
             )
             parse_warnings.extend(participant_warnings)
+        if database_path is not None:
+            download_details, detail_warnings = _current_bidder_result_details(document, text, scope)
+            bidder_details.extend(download_details)
+            parse_warnings.extend(detail_warnings)
         participants.extend(parsed_participants)
         if scope is not None and not any((
             scope.extract_items, scope.extract_participants, scope.extract_metadata,
@@ -780,6 +846,7 @@ def _ingest_expanded(
              document.source_size if document.source_size is not None else len(document.content))
             for document in expanded
         ],
+        bidder_result_details=bidder_details,
     ) if database_path is not None else result
 
 

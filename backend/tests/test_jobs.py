@@ -99,6 +99,22 @@ def test_new_batch_jobs_default_to_model_led_hybrid(tmp_path):
     assert job['mode'] == 'hybrid'
 
 
+def test_bidder_result_sidecar_is_not_a_notice_progress_entry(tmp_path):
+    root = tmp_path / 'job'
+    notices = root / 'notices'
+    notices.mkdir(parents=True)
+    jobs.write_json(notices / '00000.json', {
+        'index': 0, 'name': 'notice', 'status': 'done', 'items': 1,
+    })
+    jobs.write_json(notices / '00000.result.bidder-details.json', {
+        'version': 1, 'records': [{'raw_name': '供应商甲'}],
+    })
+
+    assert jobs.read_notice_progress(root) == [{
+        'index': 0, 'name': 'notice', 'status': 'done', 'items': 1,
+    }]
+
+
 def test_job_recovery_after_commit_before_checkpoint_does_not_duplicate(tmp_path):
     root, database = prepare(tmp_path)
     entry = jobs.read_json(root / 'manifest.json')[0]

@@ -350,7 +350,7 @@ def _recover_notice_telemetry(checkpoint: Path, row: dict) -> dict:
 def read_notice_progress(root: Path) -> list[dict]:
     entries = []
     for path in sorted((root / 'notices').glob('*.json')):
-        if path.name.endswith(('.result.json', '.telemetry.json')):
+        if path.name.endswith(('.result.json', '.telemetry.json', '.result.bidder-details.json')):
             continue
         entry = _read_progress_entry(path)
         if entry is None:
@@ -514,10 +514,15 @@ def _process_notice(root_string: str, entry: dict) -> dict:
             for file in entry['files']:
                 if file_hash(Path(file['path'])) != file['sha256']:
                     raise ValueError('处理期间源文件发生变化；未导入结果，请创建新任务')
+            bidder_details = _job_bidder_details(
+                root, entry, job, result_file, ingestion, expand_paths, DiskDocument,
+                limiter, stop_path,
+            )
             source_key = job['id'] + ':' + str(entry['index'])
             saved = save_import(Path(job['database']), result, source_key=source_key,
                                 replace_existing=bool(entry.get('replace_existing')),
-                                source_hashes=_cached_source_hashes(result_file))
+                                source_hashes=_cached_source_hashes(result_file),
+                                bidder_result_details=bidder_details)
             status.update(status='done', notice_id=saved.notice_id, items=result.items_found,
                           participants=len(result.participants), warnings=result.warnings,
                           source_files=len(result.source_files))
@@ -605,9 +610,76 @@ def _build_result(root, entry, job, checkpoint, result_file, status, cached_pars
                  if document.source_size is not None else document.path.stat().st_size}
                 for document in expanded
             ]
+            parse_options = ({"ocr_enabled": model_settings.ocr_enabled,
+                              "ocr_language": model_settings.ocr_language,
+                              "ocr_timeout_seconds": model_settings.ocr_timeout_seconds}
+                             if model_settings.ocr_enabled else {})
+            details = ingestion.extract_scoped_bidder_details(
+                expanded, parse_options=parse_options,
+            )
+            _write_bidder_details(result_file, details)
             write_json(_source_hashes_path(result_file), source_hashes)
             write_json(result_file, result.model_dump(mode='json'))
             return result
+
+
+def _write_bidder_details(result_file: Path, details: list[dict]) -> None:
+    # A separate sidecar preserves the existing ImportResult/cache contract.
+    serializable = json.loads(json.dumps(details, ensure_ascii=False, default=str))
+    write_json(result_file.with_suffix('.bidder-details.json'), {
+        'version': 1, 'identity': _bidder_details_identity(), 'records': serializable,
+    })
+
+
+def _bidder_details_identity() -> str:
+    from app import bidder_result_details, ingestion
+
+    digest = hashlib.sha256()
+    for module in (bidder_result_details, ingestion):
+        try:
+            with Path(module.__file__).open('rb') as stream:
+                digest.update(hashlib.file_digest(stream, 'sha256').digest())
+        except OSError:
+            digest.update(b'unavailable')
+    return digest.hexdigest()
+
+
+def _job_bidder_details(root, entry, job, result_file, ingestion, expand_paths, DiskDocument,
+                        limiter, stop_path) -> list[dict]:
+    path = result_file.with_suffix('.bidder-details.json')
+    if path.exists() and not entry.get('replace_existing'):
+        try:
+            cached = read_json(path)
+            if (isinstance(cached, dict) and cached.get('version') == 1
+                    and cached.get('identity') == _bidder_details_identity()
+                    and isinstance(cached.get('records'), list)
+                    and all(isinstance(record, dict) and record.get('raw_name')
+                            for record in cached['records'])):
+                return cached['records']
+        except (OSError, ValueError, TypeError):
+            pass
+    # Old resumable jobs have an ImportResult cache but no result-field sidecar.
+    # Recover these fields from unchanged sources without another model request.
+    with tempfile.TemporaryDirectory(prefix='bidder-details-', dir=root) as temporary:
+        with limiter.document_slot(stop_path=stop_path):
+            expanded, _ = expand_paths(
+                [DiskDocument(file['name'], Path(file['path'])) for file in entry['files']],
+                Path(temporary),
+            )
+        parse_options = ({"ocr_enabled": settings.ocr_enabled,
+                          "ocr_language": settings.ocr_language,
+                          "ocr_timeout_seconds": settings.ocr_timeout_seconds}
+                         if job['ocr'] else {})
+        details = ingestion.extract_scoped_bidder_details(
+            expanded, parse_options=parse_options,
+        )
+        for file in entry['files']:
+            if file_hash(Path(file['path'])) != file['sha256']:
+                raise ValueError('补充标准结果字段时源文件发生变化；请创建新任务')
+        _write_bidder_details(result_file, details)
+        return details
+
+
 def snapshot(root: Path) -> dict:
     job = read_json(root / 'job.json')
     entries = read_notice_progress(root)

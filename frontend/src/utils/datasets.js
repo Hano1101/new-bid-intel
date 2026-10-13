@@ -31,6 +31,17 @@ export function createDatasetClient(getDataset, getVersion, fetchImpl = fetch) {
         checkCurrent()
         return payload
       },
+      async blob() {
+        let payload
+        try {
+          payload = await response.blob()
+        } catch (error) {
+          checkCurrent()
+          throw error
+        }
+        checkCurrent()
+        return payload
+      },
     }
   }
 }

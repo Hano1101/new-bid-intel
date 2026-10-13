@@ -509,3 +509,49 @@ test('downloading a job report includes session cookies on its cross-origin GET'
     else delete globalThis.document
   }
 })
+
+test('completed job result download exports only notice IDs marked done in its report', async (t) => {
+  const requests = []
+  const workbook = new Blob(['xlsx'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  t.mock.method(globalThis, 'fetch', async (url, options = {}) => {
+    const parsed = new URL(url)
+    requests.push({ url: parsed, options })
+    if (parsed.pathname.endsWith('/report')) return response({ notices: [
+      { status: 'done', notice_id: 31 },
+      { status: 'failed', notice_id: 32 },
+      { status: 'done', notice_id: 33 },
+      { status: 'running', notice_id: 34 },
+    ] })
+    if (parsed.pathname.endsWith('/export-results')) return {
+      ok: true, status: 200, statusText: 'OK', headers: new Headers(),
+      json: async () => ({}), blob: async () => workbook,
+    }
+    if (parsed.pathname.endsWith('/jobs')) return response([])
+    throw new Error(`Unexpected request ${parsed.pathname}`)
+  })
+  const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  globalThis.document = {
+    body: { appendChild(link) { link.remove = () => {} } },
+    createElement: () => ({ click() {} }),
+  }
+  t.mock.method(URL, 'createObjectURL', () => 'blob:job-result')
+  t.mock.method(URL, 'revokeObjectURL', () => {})
+  const view = await mount({ apiBase: 'http://api.test', datasetId: 'dataset-b' })
+  try {
+    await settle()
+    requests.length = 0
+    await view.state.downloadJobResults({ id: 'job-123', status: 'completed_with_errors' })
+
+    assert.deepEqual(requests.map(({ url }) => url.pathname), [
+      '/api/v1/jobs/job-123/report', '/api/v1/notices/export-results',
+    ])
+    assert.deepEqual(JSON.parse(requests[1].options.body), { notice_ids: [31, 33] })
+    assert.ok(requests.every(({ options }) => options.credentials === 'include'))
+    assert.ok(requests.every(({ options }) => options.headers.get('X-Dataset-ID') === 'dataset-b'))
+    assert.equal(view.state.error, '')
+  } finally {
+    view.unmount()
+    if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument)
+    else delete globalThis.document
+  }
+})

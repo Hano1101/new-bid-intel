@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { createDatasetClient } from '../utils/datasets.js'
+import { downloadNoticeResults } from '../utils/resultWorkbook.js'
 
 const props = defineProps({ apiBase: String, datasetId: String })
 const emit = defineEmits(['updated'])
@@ -17,6 +18,7 @@ const directoryError = ref('')
 const jobs = ref([])
 const error = ref('')
 const busy = ref(false)
+const downloadingResultsJob = ref('')
 let version = 0
 let timer
 let disposed = false
@@ -159,6 +161,19 @@ async function report(job) {
     URL.revokeObjectURL(url)
   } catch (cause) { if (cause.name !== 'AbortError') error.value = cause.message }
 }
+async function downloadJobResults(job) {
+  if (downloadingResultsJob.value || !['completed', 'completed_with_errors'].includes(job.status)) return
+  downloadingResultsJob.value = job.id
+  error.value = ''
+  try {
+    const payload = await request('/' + encodeURIComponent(job.id) + '/report')
+    const noticeIds = (Array.isArray(payload?.notices) ? payload.notices : [])
+      .filter((row) => row?.status === 'done' && row.notice_id != null)
+      .map((row) => row.notice_id)
+    await downloadNoticeResults(client, props.apiBase, noticeIds, `任务三后台任务-${job.id}-标准结果表.xlsx`)
+  } catch (cause) { if (cause.name !== 'AbortError') error.value = cause.message || '标准结果表下载失败' }
+  finally { if (downloadingResultsJob.value === job.id) downloadingResultsJob.value = '' }
+}
 watch(() => props.datasetId, () => {
   version++
   browserRequest++
@@ -175,6 +190,7 @@ watch(() => props.datasetId, () => {
   browsing.value = false
   preflighting.value = false
   busy.value = false
+  downloadingResultsJob.value = ''
   lastDone = -1
   refresh()
 }, { immediate: true })
@@ -259,6 +275,9 @@ onBeforeUnmount(() => { disposed = true; version++; clearTimeout(timer) })
         <button v-else-if="!['completed', 'completed_with_errors'].includes(job.status)" class="secondary" @click="action(job, 'resume')">继续处理</button>
         <button v-if="job.failed && job.status !== 'running'" class="secondary" @click="action(job, 'resume?retry_failed=true')">重试失败公告</button>
         <button class="secondary" @click="report(job)">下载处理报告</button>
+        <button v-if="['completed', 'completed_with_errors'].includes(job.status) && job.done > 0" class="primary" :disabled="!!downloadingResultsJob" @click="downloadJobResults(job)">
+          {{ downloadingResultsJob === job.id ? '正在生成结果表…' : '下载该任务标准结果表' }}
+        </button>
       </div>
       <details v-if="job.errors.length"><summary>失败原因</summary><p v-for="entry in job.errors" :key="entry.name">{{ entry.name }}：{{ entry.error }}</p></details>
     </article>
