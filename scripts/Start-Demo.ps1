@@ -145,8 +145,11 @@ if (-not $npmCmd) { throw '找不到 Node.js/npm；请先安装 Node.js。' }
 $hasBackendDeps = & $pythonExe -c "import fastapi, uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0 -or $InstallDependencies) {
     if ($Offline -and $LASTEXITCODE -ne 0) { throw '离线演示缺少后端依赖；请在联网准备阶段先运行本脚本并安装依赖。' }
-    & $pythonExe -m pip install -e '.[dev,ocr]' --disable-pip-version-check
-    if ($LASTEXITCODE -ne 0) { throw '安装后端依赖失败。' }
+    Push-Location $backendRoot
+    try {
+        & $pythonExe -m pip install -e '.[dev,ocr]' --disable-pip-version-check
+        if ($LASTEXITCODE -ne 0) { throw '安装后端依赖失败。' }
+    } finally { Pop-Location }
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $frontendRoot 'node_modules'))) {
@@ -161,6 +164,11 @@ if ($authEnabled) {
     foreach ($keyName in @('AUTH_USERNAME', 'AUTH_PASSWORD', 'AUTH_SECRET_KEY')) {
         if (-not (Read-EnvValue $keyName)) { throw "AUTH_ENABLED=true，但 $keyName 未配置；演示账号不会被打印到终端。" }
     }
+}
+
+$bundledOfficialDatabase = Join-Path (Split-Path $repoRoot -Parent) '08_任务三自助上传与下载\运行数据库\official.sqlite'
+if (Test-Path -LiteralPath $bundledOfficialDatabase -PathType Leaf) {
+    & (Join-Path $PSScriptRoot 'Restore-OfficialDataset.ps1') -DatabasePath $bundledOfficialDatabase
 }
 
 if ($Offline) {

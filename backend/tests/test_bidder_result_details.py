@@ -10,6 +10,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 
 from app.bidder_result_details import (
+    _package,
     extract_bidder_details,
     merge_bidder_details,
     normalize_bidder_name,
@@ -146,6 +147,14 @@ def test_default_package_only_falls_back_to_a_unique_named_package():
     assert normalize_bidder_name(" 公司（甲） \n") == "公司(甲)"
 
 
+@pytest.mark.parametrize("context,expected", [
+    ("A包", "A"), ("A包（采购内容）", "A"), ("1包", "1"),
+    ("合同包2 评审结果", "2"), ("未分包项目评审结果", "default"),
+])
+def test_package_context_extracts_explicit_prefix_and_suffix_labels(context, expected):
+    assert _package(context) == expected
+
+
 @pytest.mark.parametrize("format", ["docx", "xlsx", "xls", "pdf"])
 def test_real_document_table_formats(format):
     buffer = io.BytesIO()
@@ -194,3 +203,21 @@ def test_real_document_table_formats(format):
 def test_unsupported_or_malformed_document_is_safe():
     assert extract_bidder_details(SourceDocument("bad.xlsx", b"not an xlsx")) == []
     assert extract_bidder_details(SourceDocument("body.txt", "供应商甲 通过 100元".encode())) == []
+
+
+def test_legacy_office_conversion_uses_shared_document_converter(monkeypatch):
+    document = Document()
+    table = document.add_table(rows=2, cols=5)
+    for row_index, row in enumerate(ROWS[:2]):
+        for column_index, value in enumerate(row):
+            table.cell(row_index, column_index).text = value
+    source = io.BytesIO()
+    document.save(source)
+    expected_docx = source.getvalue()
+    from app import legacy_documents
+
+    monkeypatch.setattr(legacy_documents, "convert_doc", lambda _content: expected_docx)
+    details = extract_bidder_details(SourceDocument("review.doc", b"legacy-placeholder"))
+    assert len(details) == 1
+    assert details[0]["raw_name"] == "供应商甲"
+    assert details[0]["evaluation_score"] == Decimal("99.92")

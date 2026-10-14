@@ -93,8 +93,9 @@ def test_result_export_matches_template_and_keeps_unavailable_fields_blank(tmp_p
     assert item["D3"].value == "测试设备"
     assert item["H3"].value == 2
     assert item["H3"].number_format == "General"
-    assert item["I3"].value == 1.23
-    assert item["J3"].value == 2.47
+    assert item["I3"].value == 1.2345
+    assert item["J3"].value == 2.469
+    assert item["I3"].number_format == "0.####"
     assert item["K3"].value is None
 
     bidders = workbook["投标人表"]
@@ -105,6 +106,44 @@ def test_result_export_matches_template_and_keeps_unavailable_fields_blank(tmp_p
     assert bidders["G3"].value is None
     assert bidders["D4"].value == "测试参与供应商"
     assert bidders["E4"].value == "参与人"
+
+
+def test_item_export_keeps_small_positive_prices(tmp_path, monkeypatch):
+    database = tmp_path / "small-prices.db"
+    monkeypatch.setattr(settings, "database_path", str(database))
+    imported = _import_sample(database)
+    with connect(database) as connection:
+        connection.execute(
+            "UPDATE procurement_items SET unit_price='2.5', total_price='6.5' WHERE notice_id=?",
+            (imported.notice_id,),
+        )
+        connection.commit()
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/notices/export-results", json={"notice_ids": [imported.notice_id]},
+        )
+    assert response.status_code == 200
+    workbook = load_workbook(BytesIO(response.content), data_only=True)
+    assert workbook["标的表"]["I3"].value == 0.00025
+    assert workbook["标的表"]["J3"].value == 0.00065
+    assert workbook["标的表"]["I3"].number_format == "0.#####"
+    assert workbook["总表"]["H3"].value == 1.23
+
+
+def test_export_does_not_replace_disclosed_total_with_inconsistent_product(tmp_path, monkeypatch):
+    database = tmp_path / "conflicting-prices.db"
+    monkeypatch.setattr(settings, "database_path", str(database))
+    imported = _import_sample(database)
+    with connect(database) as connection:
+        connection.execute("UPDATE procurement_items SET total_price='20000' WHERE notice_id=?",
+                           (imported.notice_id,))
+        connection.commit()
+    with TestClient(app) as client:
+        response = client.post("/api/v1/notices/export-results",
+                               json={"notice_ids": [imported.notice_id]})
+    sheet = load_workbook(BytesIO(response.content), data_only=True)["标的表"]
+    assert sheet["J3"].value == 2
+    assert sheet["K3"].value is None
 
 
 def test_export_limits_rows_to_selected_notices_and_active_dataset(tmp_path, monkeypatch):
@@ -236,3 +275,39 @@ def test_export_includes_evidence_backed_review_bid_score_and_failure_reason(tmp
     assert bidders.cell(failed_row, 6).value == "未通过"
     assert bidders.cell(failed_row, 7).value is None
     assert "证明材料缺失" in bidders.cell(failed_row, 9).value
+
+
+def test_explicit_bidder_package_gets_a_matching_summary_parent_row(tmp_path, monkeypatch):
+    database = tmp_path / "explicit-package-parent.db"
+    monkeypatch.setattr(settings, "database_path", str(database))
+    imported = _import_sample(database)
+    from app.storage import save_bidder_result_details
+
+    record = {
+        "package_code": "1", "raw_name": "附表新增投标人",
+        "qualification_status": "通过", "compliance_status": "通过",
+        "review_status": "通过", "bid_amount": Decimal(125000),
+        "evaluation_score": Decimal("88.50"), "unsuccessful_reason": None,
+        "source_file": "review.pdf", "source_location": "page:1/table:1/row:2",
+        "source_evidence": "1包 | 附表新增投标人 | 通过 | 12.5万元 | 88.50",
+        "field_evidence": {},
+    }
+    with connect(database) as connection:
+        connection.execute("UPDATE packages SET package_code='default', package_name=NULL")
+        save_bidder_result_details(connection, imported.notice_id, [record])
+        connection.commit()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/notices/export-results", json={"notice_ids": [imported.notice_id]},
+        )
+    workbook = load_workbook(BytesIO(response.content), data_only=True)
+    total = workbook["总表"]
+    bidders = workbook["投标人表"]
+    total_keys = {(total.cell(row, 3).value, total.cell(row, 4).value)
+                  for row in range(3, total.max_row + 1)}
+    bidder_keys = {(bidders.cell(row, 2).value, bidders.cell(row, 3).value)
+                   for row in range(3, bidders.max_row + 1)}
+    assert response.status_code == 200
+    assert ("t20261013_12345678", "1") in total_keys
+    assert ("t20261013_12345678", "1") in bidder_keys

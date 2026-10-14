@@ -4,7 +4,7 @@
 
 ## 快速离线演示
 
-首次使用先安装项目依赖。随后在仓库根目录配置本机评审账号并启动离线样例：
+首次使用先安装项目依赖。公开仓库需要先配置本机评审账号；受控提交包已附本机账号时请直接启动，重复配置会重置密码：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Configure-ReviewerAccount.ps1
@@ -12,6 +12,20 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Start-Demo.ps1 -Offline
 ```
 
 离线模式会准备纯虚构样例并使用规则抽取，不需要模型 API Key。它演示操作流程，不代表真实材料处理结果或比赛评分。启动脚本显示分析台和标注页地址；演示结束运行 [停止脚本](../scripts/Stop-Demo.ps1)。局域网部署与第二设备检查见 [`LAN_ACCEPTANCE.md`](LAN_ACCEPTANCE.md)。
+
+## 官方全量数据与任务三验收
+
+受控提交包的 `08_任务三自助上传与下载/运行数据库/official.sqlite` 保存了 1,038 条官方公告的运行数据。源码目录旁保留该目录结构时，`Start-Demo.ps1` 会首次自动恢复数据集；已有同 ID 数据集会保留，不覆盖。公开 Git 仓库不包含数据库。单独恢复可运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Restore-OfficialDataset.ps1 -DatabasePath "<official.sqlite 的实际路径>"
+```
+
+登录后进入“数据集管理”，选择“官方全量·修复后”，确认公告数量为 1,038，即可查询标的、公告详情和主体关系。需要重新覆盖恢复时，先停止服务并备份现有数据库，再使用恢复脚本的 `-Force` 参数。
+
+验收任务三时另建空数据集，进入“单条导入”，选择公告 HTML 和对应附件，点击“导入单条公告”；完成后点击“下载标准结果表”。同步批量和后台任务分别提供本批及该任务的下载入口。工作簿包含总表、标的表、投标人表，只导出本次成功公告。URL 为灰色选填字段；中标金额和报价换算万元后保留两位小数，标的单价和总价保留有效小数。原文未披露的分数、报价和审查结果留空，不能用排名或中标金额替代。
+
+本机地址仅供本机验收。评委远程测试需要实际部署公网服务，步骤见 [外网部署说明](EXTERNAL_REVIEW_DEPLOYMENT.md)。域名配置、服务器运行和其他网络中的设备测试完成前，不能将示例域名视为已上线地址。
 
 ## 由演示负责人准备账号
 

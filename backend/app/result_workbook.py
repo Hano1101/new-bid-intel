@@ -47,8 +47,8 @@ SHEETS: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
             "品牌名，原文未给出则留空。",
             "规格/型号，原文未给出则留空。",
             "数量：正整数，照录原文。原文未给出则留空。",
-            "单价：单位(万元)。原文未给出则留空。",
-            "总价：单价×数量，或按原文填写，单位（万元）。原文未给出则留空。",
+            "单价：单位(万元)，换算后保留全部有效小数。原文未给出则留空。",
+            "总价：按原文或合理的单价×数量填写，单位（万元），保留全部有效小数。不合理的推算留空。",
             '记录的类别，属于结果公示提取的，记为需求，属于招标类提取的，记为中标。',
         ),
     ),
@@ -111,6 +111,12 @@ def _yuan_to_wanyuan(value: Any) -> float | None:
     if amount is None:
         return None
     return float((amount / Decimal(10000)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def _item_yuan_to_wanyuan(value: Any) -> float | None:
+    """Keep item prices, including sub-yuan prices, without two-place rounding."""
+    amount = _number(value)
+    return float(amount / Decimal(10000)) if amount is not None else None
 
 
 def _quantity(value: Any) -> Any:
@@ -337,7 +343,8 @@ def build_result_workbook(connection: sqlite3.Connection, notice_ids: list[int] 
                     _package_label(row["package_code"], row["package_name"]),
                     _as_text(row["product_name"]), _as_text(row["category"]),
                     _as_text(row["brand"]), _as_text(row["model"]), _quantity(row["quantity"]),
-                    _yuan_to_wanyuan(row["unit_price"]), _yuan_to_wanyuan(row["total_price"]), "",
+                    _item_yuan_to_wanyuan(row["unit_price"]),
+                    _item_yuan_to_wanyuan(row["total_price"]), "",
                 ))
 
             participant_rows = connection.execute(
@@ -381,7 +388,8 @@ def build_result_workbook(connection: sqlite3.Connection, notice_ids: list[int] 
                 for record in matching:
                     used_details.add((notice_id, record["package_code"], normalized_name))
                 merged = merge_bidder_details([
-                    {**record, "package_code": code} for record in matching
+                    {**record, "package_code": code if code != "default" else "__unbundled__"}
+                    for record in matching
                 ])
                 return merged[0] if len(merged) == 1 else None
 
@@ -411,6 +419,10 @@ def build_result_workbook(connection: sqlite3.Connection, notice_ids: list[int] 
                     ))
             # Preserve explicit review-table suppliers that the legacy
             # participation projection did not include, without guessing winners.
+            summary_keys = {
+                (_as_text(row[2]), _as_text(row[3]))
+                for row in total_sheet.iter_rows(min_row=3, values_only=True)
+            }
             for notice_id, records in details.items():
                 for record in records:
                     name = _as_text(record["raw_name"])
@@ -425,6 +437,16 @@ def build_result_workbook(connection: sqlite3.Connection, notice_ids: list[int] 
                     package = next((package for package in package_groups.get(notice_id, {}).values()
                                     if package["package_code"] == code), None)
                     package_label = _package_label(code, package["package_name"] if package else None)
+                    summary_key = (notice_context[notice_id]["uuid"], package_label)
+                    if summary_key not in summary_keys:
+                        # A source-backed package or an unresolved package must
+                        # have a parent row. Do not invent its award or amount.
+                        context = notice_context[notice_id]
+                        total_sheet.append((
+                            total_sheet.max_row - 1, None, context["uuid"], package_label,
+                            context["project_name"], context["buyer"], "", None,
+                        ))
+                        summary_keys.add(summary_key)
                     bidder_sheet.append((
                         bidder_sheet.max_row - 1, notice_context[notice_id]["uuid"],
                         package_label, name, *_bidder_cells(record, winner=False),
@@ -455,7 +477,12 @@ def build_result_workbook(connection: sqlite3.Connection, notice_ids: list[int] 
         }[sheet.title]
         for column in amount_columns:
             for row_index in range(3, sheet.max_row + 1):
-                sheet.cell(row_index, column).number_format = _CURRENCY_FORMAT
+                cell = sheet.cell(row_index, column)
+                if sheet.title == "标的表" and cell.value is not None:
+                    places = max(0, -Decimal(str(cell.value)).as_tuple().exponent)
+                    cell.number_format = "0" + ("." + "#" * places if places else "")
+                else:
+                    cell.number_format = _CURRENCY_FORMAT
         if sheet.title == "标的表":
             for row_index in range(3, sheet.max_row + 1):
                 sheet.cell(row_index, 8).number_format = "General"

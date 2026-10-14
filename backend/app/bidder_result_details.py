@@ -27,7 +27,6 @@ from app.parsers import (
     _header_key,
     _invalid_participant_name,
     _money,
-    _nearby_package_label,
     _participant_package_code,
 )
 
@@ -49,7 +48,9 @@ _ALIASES = {
     "unsuccessful_reason": ("未中标原因", "未成交原因", "未中标成交原因", "落标原因"),
 }
 _PACKAGE_PATTERN = re.compile(
-    r"(?:合同|采购|标段|标包)?包\s*(?:编号|号)?\s*[:：]?\s*([A-Za-z0-9一二三四五六七八九十]+)"
+    r"(?:合同|采购|标段|标包)?包\s*(?:编号|号)?\s*[:：]?\s*"
+    r"(?P<after>[A-Za-z0-9一二三四五六七八九十]+)(?![A-Za-z0-9])(?=\s*(?:[（(:：]|$|[\u4e00-\u9fff]))"
+    r"|(?P<before>[A-Za-z0-9一二三四五六七八九十]+)\s*(?:号)?包"
 )
 _AMOUNT_PATTERN = re.compile(r"(-?\d[\d,，]*(?:\.\d+)?)\s*(亿元|万元|元)")
 _UNIT_PATTERN = re.compile(r"(?:金额单位|报价单位|单位)\s*[：:]?\s*[（(]?\s*(?:人民币)?\s*(亿元|万元|元)")
@@ -104,7 +105,32 @@ def _columns(header: list[str], context: str) -> dict[str, int]:
 
 def _package(context: str) -> str:
     matches = list(_PACKAGE_PATTERN.finditer(unicodedata.normalize("NFKC", context)))
-    return _participant_package_code(matches[-1].group(1)) if matches else "default"
+    if not matches:
+        return "default"
+    match = matches[-1]
+    return _participant_package_code(match.group("after") or match.group("before"))
+
+
+def _nearby_result_package(table: Any) -> str:
+    node = table
+    for _ in range(8):
+        parent = node.parent
+        if parent is None:
+            break
+        preceding = []
+        for child in parent.children:
+            if child is node:
+                break
+            if getattr(child, "name", None) == "table":
+                continue
+            text = _clean(child if isinstance(child, str) else child.get_text(" ", strip=True))
+            if text and len(text) <= 180:
+                preceding.append(text)
+        for text in reversed(preceding):
+            if (code := _package(text)) != "default":
+                return code
+        node = parent
+    return "default"
 
 
 def _supplier_amount_units(name: str, raw_amount: str, source_text: str,
@@ -296,6 +322,10 @@ def extract_bidder_details(document: SourceDocument) -> list[dict[str, Any]]:
         ))
 
     try:
+        if suffix in {".doc", ".rtf", ".wps"}:
+            from app.legacy_documents import convert_doc
+
+            return extract_bidder_details(SourceDocument(document.filename, convert_doc(document.content)))
         if suffix in {".html", ".htm"}:
             soup = BeautifulSoup(document.content, "html.parser")
             source_text = soup.get_text(" ", strip=True)
@@ -318,7 +348,7 @@ def extract_bidder_details(document: SourceDocument) -> list[dict[str, Any]]:
                     else:
                         break
                     sibling = sibling.previous_sibling
-                if package := _nearby_package_label(table):
+                if (package := _nearby_result_package(table)) != "default":
                     context.append(f"合同包{package}")
                 add(rows, index, " ".join(reversed(context)), source_text)
         elif suffix == ".docx":
