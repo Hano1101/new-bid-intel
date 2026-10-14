@@ -1,0 +1,50 @@
+{
+  "verified_at_utc": "2026-10-14T15:39:47.702Z",
+  "full_browser_verified_at_utc": "2026-10-14T15:35:28.077Z",
+  "url": "https://review.ru00ys-lab.com",
+  "server_ipv4": "47.82.86.90",
+  "platform": "Ubuntu 24.04 / Nginx / FastAPI single process / SQLite",
+  "official_notices": 1038,
+  "official_snapshot_sha256": "7bd0e6235a36f4e463c282c6596d9b82d9a3e90d962599700b44d0d14bbe2fd5",
+  "official_result_rows": {
+    "总表": 1853,
+    "标的表": 6472,
+    "投标人表": 5406
+  },
+  "standard_columns": {
+    "总表": 8,
+    "标的表": 11,
+    "投标人表": 9
+  },
+  "public_https_browser_checks": [
+    "UI login",
+    "Session after refresh",
+    "Official /items query",
+    "Official /organizations query",
+    "Official buyer relationship query",
+    "Official notice detail",
+    "UI single notice upload",
+    "UI standard workbook download",
+    "Cross-dataset export isolation",
+    "UI logout and protected API 401"
+  ],
+  "page_errors": [],
+  "dns_verification": "Authoritative Cloudflare nameservers and Google public DNS return server IPv4; final browser verification used normal DNS with no resolver override.",
+  "final_browser_checks": [
+    "Public DNS and trusted HTTPS without resolver override",
+    "Reviewer login and Secure/HttpOnly/Strict cookie",
+    "Session survives refresh; official 1038 notices available after service restart",
+    "Logout denies protected API"
+  ],
+  "tls": {
+    "issuer": "YE1",
+    "protocol": "TLS 1.3",
+    "subjectName": "review.ru00ys-lab.com",
+    "validFrom": 1791988524,
+    "validTo": 1799764523
+  },
+  "tls_validation": "Valid Let's Encrypt certificate; certificate validation was not bypassed.",
+  "auth": "Secure / HttpOnly / SameSite=Strict reviewer session cookie",
+  "services": "systemd enabled for API/Nginx; Certbot renewal timer enabled",
+  "limits": "One production sample is not an accuracy or throughput benchmark. Historical scan/unsupported/failed-source records are not all reprocessed by installing OCR."
+}

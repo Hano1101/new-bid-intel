@@ -8,7 +8,7 @@ User=bidintel
 Group=bidintel
 WorkingDirectory=/opt/bid-intel/backend
 EnvironmentFile=/opt/bid-intel/backend/.env
-ExecStart=/opt/bid-intel/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/bid-intel/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips 127.0.0.1
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
@@ -16,6 +16,7 @@ PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
 ReadWritePaths=/opt/bid-intel/backend/.data
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

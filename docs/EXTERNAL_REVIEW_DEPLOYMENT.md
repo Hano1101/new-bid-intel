@@ -2,6 +2,8 @@
 
 评委要求“直接在提供的网站上测试”时，应提供一个能从评委网络访问的 HTTPS 地址。已有博客域名可以继续保留，建议使用独立子域名，例如 `review.ru00ys-lab.com`，不要把博客根域名改到本系统。
 
+本项目已于 2026-10-14 部署到 [https://review.ru00ys-lab.com](https://review.ru00ys-lab.com)，官方数据集保留 1,038 条公告。公网浏览器登录、查询、上传、下载和退出验收均已通过，服务重启后数据仍可访问；具体范围见 [部署验收记录](benchmarks/vps-deployment-20261014.json)。以下步骤用于复现部署。
+
 ## 先确认托管能力
 
 域名只负责解析，不提供 Python 后端运行环境。当前 `ru00ys-lab.com` 的公开 DNS 使用 Cloudflare，博客响应头显示 GitHub/Cloudflare 静态托管特征。静态博客托管不能直接运行 FastAPI、SQLite 和上传任务。
@@ -17,15 +19,15 @@
 
 以下示例以 Ubuntu 22.04/24.04、子域名 `review.ru00ys-lab.com` 为例。实际服务器地址、用户名和域名由团队填写。
 
-演示服务器建议至少 2 vCPU、2 GiB 内存、30 GiB 磁盘及固定公网 IPv4。1 GiB 内存只能作为精简部署选择：前端构建后由 Nginx 提供，FastAPI 保持单进程，使用 SQLite 与在线模型服务，避免同时运行 Neo4j、本地模型或批量 OCR，并配置交换空间缓冲峰值。“非中国优化”线路需从评委所在网络验证连接速度；标称公网带宽不能保证国内访问质量。当前仅完成 Windows 本机验收，未实测该服务器规格。
+演示服务器建议至少 2 vCPU、2 GiB 内存、30 GiB 磁盘及固定公网 IPv4。小内存部署时，前端在开发电脑构建，由 Nginx 提供静态文件，FastAPI 保持单进程，使用 SQLite 与在线模型服务，将公告处理、文档处理和模型并发均限制为 1，并配置交换空间缓冲峰值。避免同时运行 Neo4j、本地大模型或多路 OCR。“非中国优化”线路需从评委所在网络验证连接速度；标称公网带宽不能保证国内访问质量。
 
 1. 在 Cloudflare DNS 增加一条记录：
 
    | 类型 | 名称 | 内容 | 代理 |
    |---|---|---|---|
-   | A | `review` | `<服务器公网IPv4>` | Proxied（橙云） |
+   | A | `review` | `<服务器公网IPv4>` | 仅 DNS（灰云，首次申请证书期间） |
 
-   若使用 IPv6，再单独增加 AAAA；没有 IPv6 时不要填写伪造地址。Cloudflare SSL/TLS 选择 **Full (strict)**，服务器证书使用 Let’s Encrypt。
+   若使用 IPv6，再单独增加 AAAA；没有 IPv6 时不要填写伪造地址。先确认 A 记录生效、云服务器安全组允许 TCP 80/443，再申请 Let’s Encrypt 证书。证书部署并验证完成后可启用 Cloudflare 代理；启用时 SSL/TLS 选择 **Full (strict)**。
 
 2. 将提交包中的 `01_工程源码` 上传服务器，复制官方全量数据库到后端数据目录，例如：
 
@@ -48,6 +50,9 @@
    AUTH_COOKIE_SECURE=true
    CORS_ALLOWED_ORIGINS=https://review.ru00ys-lab.com
    EXTRACTION_MODE=rules
+   JOB_WORKERS=1
+   DOCUMENT_WORKERS=1
+   MODEL_CONCURRENCY=1
    ```
 
    评委只需要查看已经入库的官方数据和任务三规则导入时，不配置 `MODEL_API_KEY`；需要模型提取时再在服务器私有环境变量中配置允许的模型服务。
@@ -62,14 +67,14 @@
    .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
    ```
 
-   前端用与评审域名一致的 API 基址构建：
+   前端以同源 API 基址构建，浏览器请求由 Nginx 转发：
 
    ```bash
    cd /opt/bid-intel/frontend
-   VITE_API_BASE=https://review.ru00ys-lab.com npm run build
+   VITE_API_BASE=/ npm run build
    ```
 
-5. Nginx 提供 `frontend/dist`，并将 `/api/` 反代到 `127.0.0.1:8000`。随后用 Certbot 配置 HTTPS。必须验证：
+5. 使用 `deploy/systemd/bid-intel-api.service.example` 配置开机自启，使用 `deploy/nginx/review.conf.example` 配置 Nginx，替换实际域名和路径。Nginx 提供 `frontend/dist`，并将 `/api/` 反代到 `127.0.0.1:8000`；API 8000 端口只监听服务器本机。随后用 Certbot 配置 HTTPS。必须验证：
 
    - `https://review.ru00ys-lab.com/api/v1/health` 返回 `status: ok`；
    - 登录、刷新后会话仍在；
